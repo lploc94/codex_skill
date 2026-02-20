@@ -30,7 +30,7 @@ Codex runs in background — no hardcoded timeout needed. Instead, Claude Code p
 
 ### Polling Loop
 
-1. Launch Codex with `run_in_background: true` in the Bash tool (see Step 3 for the exact command). The first line of output will be the absolute path to the JSONL file — **save this path** for use in all subsequent poll and extract commands.
+1. Launch Codex with `run_in_background: true` in the Bash tool (see Step 3 for the exact command). The Bash tool will return a `task_id` for the background process — **save this `task_id`** for cleanup after extraction. The first line of output will be the absolute path to the JSONL file — **save this path** for use in all subsequent poll and extract commands.
 2. **Every ~60 seconds**, poll the output file with the Bash tool using the **absolute path** saved in step 1. **You MUST wait before each poll** by running `sleep 60` first in the same Bash call:
    ```bash
    sleep 60 && tail -20 /tmp/codex-review-xxxx.jsonl
@@ -91,7 +91,7 @@ RUN_ID=$(date +%s)-$$ && CODEX_OUTPUT=/tmp/codex-review-$RUN_ID.jsonl && CODEX_E
 EOF
 ```
 
-**IMPORTANT**: The first line of stdout contains both absolute paths (JSONL and ERR, space-separated). **Save both paths** — you will need them for all subsequent poll, extract, and cleanup commands. Each Bash tool call is a new shell, so shell variables do not persist between calls. Always use the literal absolute paths (e.g., `/tmp/codex-review-1737000000-12345.jsonl`).
+**IMPORTANT**: The Bash tool returns a `task_id` for the background process — **save this `task_id`** (you will need it to stop the background task after extraction). The first line of stdout contains both absolute paths (JSONL and ERR, space-separated). **Save both paths** — you will need them for all subsequent poll, extract, and cleanup commands. Each Bash tool call is a new shell, so shell variables do not persist between calls. Always use the literal absolute paths (e.g., `/tmp/codex-review-1737000000-12345.jsonl`).
 
 Also save the `thread_id` from the first `thread.started` event in the JSONL — you will need it to resume the correct session in subsequent rounds (instead of `resume --last` which may pick the wrong session).
 
@@ -121,11 +121,16 @@ When `turn.completed` appears, Codex is done. When `turn.failed` appears, Codex 
 grep '"type":"agent_message"' /tmp/codex-review-XXXXXXXXXX.jsonl | tail -1 | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['item']['text'])"
 ```
 
-Clean up the temp files after extracting the result:
+Clean up after extracting the result — stop the background task and remove temp files:
 
+1. **Stop the background Bash task** immediately using `TaskOutput` with the saved `task_id` and `block: false` to drain any buffered output (ignore the content — the review was already extracted from the JSONL file). Then call `TaskStop` with the same `task_id` to terminate the background task. If either call returns an error (task already exited), this is safe to ignore.
+
+2. **Remove temp files**:
 ```bash
 rm -f /tmp/codex-review-XXXXXXXXXX.jsonl /tmp/codex-review-XXXXXXXXXX.err
 ```
+
+**Why this matters**: Without stopping the background task, its buffered output gets delivered when the conversation ends (e.g., user presses ESC), causing Claude Code to process it unnecessarily. Each round creates a new background task — you must stop each one after extracting its review.
 
 **NOTE**: No `-m` flag — use Codex's default model. Always use `--sandbox read-only` — Codex only needs to read files and run `git diff`. The prompt instructs Codex to only review, not modify code.
 
@@ -219,7 +224,7 @@ RUN_ID=$(date +%s)-$$ && CODEX_OUTPUT=/tmp/codex-review-$RUN_ID.jsonl && CODEX_E
 EOF
 ```
 
-Save the new output path and poll/extract the same way as Step 3.
+Save the new `task_id`, output path, and error path, then poll/extract/cleanup the same way as Step 3. Remember: each round creates a new background task with its own `task_id` — you must drain and stop each one after extracting its review.
 
 The `<REBUTTAL_PROMPT>` must follow this structure:
 
@@ -312,6 +317,7 @@ Then ask the user (via `AskUserQuestion`):
 | Poll progress | `tail -5 /tmp/codex-review-XXXXXXXXXX.jsonl` |
 | Extract final review | `grep '"type":"agent_message"' /tmp/codex-review-XXXXXXXXXX.jsonl \| tail -1 \| python3 -c "import sys,json; print(json.loads(sys.stdin.read())['item']['text'])"` |
 | Check errors on failure | `tail -20 /tmp/codex-review-XXXXXXXXXX.err` |
+| Stop background task | `TaskOutput(task_id=<SAVED_TASK_ID>, block=false)` then `TaskStop(task_id=<SAVED_TASK_ID>)` — call after extracting review |
 
 ## Important Rules
 
@@ -334,6 +340,7 @@ Then ask the user (via `AskUserQuestion`):
 17. **Summarize after every round** - The user should always know what happened before the next round begins.
 18. **Respect the diff boundary** - Only review and fix code within the uncommitted changes. Don't expand scope to unrelated code unless a change introduces a bug in connected code.
 19. **Require structured output** - If Codex's response doesn't follow the required ISSUE-{N} format, ask it to reformat in the resume prompt.
+20. **Stop background tasks after each round** - After extracting the review from the JSONL file, always drain with `TaskOutput(task_id, block: false)` then terminate with `TaskStop(task_id)`. Failing to do this causes buffered output to be delivered when the conversation ends, triggering unnecessary processing. Each round has its own `task_id` — stop each one.
 
 ## Error Handling
 - If `git status --porcelain` shows no changes (no modified, staged, or untracked files), inform the user and stop.
@@ -342,3 +349,4 @@ Then ask the user (via `AskUserQuestion`):
 - If Codex stalls (no new output for ~3 minutes / 3 consecutive polls), ask the user whether to wait or abort (see Stall Detection in Progress Monitoring Strategy).
 - If the diff is too large for a single prompt, suggest splitting by file or directory.
 - If the debate stalls on a point, present both positions to the user and let them decide.
+- If `TaskOutput` or `TaskStop` returns an error when cleaning up a background task (e.g., task already exited), this is safe to ignore — the task is already gone.
