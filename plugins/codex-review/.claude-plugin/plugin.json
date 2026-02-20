@@ -1,0 +1,20 @@
+{
+  "name": "codex-review",
+  "description": "Claude Code skills for adversarial code review and plan review with OpenAI Codex CLI",
+  "version": "1.1.0",
+  "author": {
+    "name": "lploc94",
+    "url": "https://github.com/lploc94"
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "skill",
+    "codex",
+    "code-review",
+    "plan-review",
+    "adversarial-review",
+    "consensus"
+  ]
+}

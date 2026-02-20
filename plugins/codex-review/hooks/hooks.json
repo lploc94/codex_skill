@@ -1,0 +1,4 @@
+{
+  "description": "codex-plan-review and codex-impl-review skills — invoke via /codex-plan-review or /codex-impl-review",
+  "hooks": {}
+}

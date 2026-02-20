@@ -1,0 +1,22 @@
+{
+  "name": "codex-review",
+  "owner": {
+    "name": "lploc94"
+  },
+  "plugins": [
+    {
+      "name": "codex-review",
+      "source": "./plugins/codex-review",
+      "description": "Adversarial plan review and code review with OpenAI Codex CLI",
+      "version": "1.1.0",
+      "category": "development",
+      "tags": [
+        "skill",
+        "codex",
+        "plan-review",
+        "code-review",
+        "adversarial-review"
+      ]
+    }
+  ]
+}
