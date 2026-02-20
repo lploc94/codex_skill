@@ -1,4 +1,4 @@
-# codex-review
+# codex_skill
 
 Claude Code plugin that uses OpenAI Codex CLI as an adversarial reviewer. Two skills: one reviews your implementation plan before you write code, the other reviews your code changes before you commit.
 
@@ -22,7 +22,7 @@ Both skills run multiple debate rounds — Codex finds issues, Claude Code fixes
 ### From Claude Code CLI
 
 ```bash
-claude mcp add-plugin codex-review --source https://github.com/lploc94/codex-review
+claude mcp add-plugin codex-review --source https://github.com/lploc94/codex_skill
 ```
 
 ### Manual installation
@@ -31,13 +31,13 @@ claude mcp add-plugin codex-review --source https://github.com/lploc94/codex-rev
 
 ```bash
 cd ~/.claude/plugins
-git clone https://github.com/lploc94/codex-review.git
+git clone https://github.com/lploc94/codex_skill.git
 ```
 
 2. Or clone anywhere and add the plugin manually:
 
 ```bash
-git clone https://github.com/lploc94/codex-review.git ~/projects/codex-review
+git clone https://github.com/lploc94/codex_skill.git ~/projects/codex_skill
 ```
 
 Then add to your Claude Code settings (`.claude/settings.json`):
@@ -47,7 +47,7 @@ Then add to your Claude Code settings (`.claude/settings.json`):
   "plugins": [
     {
       "name": "codex-review",
-      "source": "/absolute/path/to/codex-review/plugins/codex-review"
+      "source": "/absolute/path/to/codex_skill/plugins/codex-review"
     }
   ]
 }
@@ -110,8 +110,6 @@ Key design decisions:
 │   └── marketplace.json
 ├── plugins/
 │   └── codex-review/
-│       ├── .claude-plugin/
-│       │   └── plugin.json
 │       ├── hooks/
 │       │   └── hooks.json
 │       └── skills/
