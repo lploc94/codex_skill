@@ -39,9 +39,10 @@ Codex runs in background — no hardcoded timeout needed. Instead, Claude Code p
    - "Codex is thinking... (*Analyzing error handling patterns*)"
    - "Codex is running: `git diff HEAD`"
    - "Codex finished reading the diff, now analyzing..."
-4. **Check for completion**: if `turn.completed` appears in the output, Codex is done — proceed to extract the review.
-5. **Check for turn failure**: if `turn.failed` appears in the output, Codex encountered an error at the turn level (network, auth, server). Extract the `error.message` field, report it to the user, and stop polling.
-6. **Check for process failure**: if the background Bash task itself has exited with an error (non-zero exit, or the process is gone but no `turn.completed` or `turn.failed`), read the stderr file and report the error to the user.
+4. **Check for any terminal event**: when `turn.completed`, `turn.failed`, or process exit (no new output + task gone) is detected — **your very first action MUST be calling `TaskOutput(task_id, block:true, timeout=10000)`** before doing anything else (ignore the returned output). This dequeues the background task completion notification from the runtime's internal queue. **If you skip this or delay it, the notification will leak and print "Background command completed" at the end of the session.** This applies to ALL terminal paths, not just success. Then:
+   - If `turn.completed`: proceed to extract the review.
+   - If `turn.failed`: extract `error.message` from the event, report it to the user, and stop polling.
+5. **Check for process failure**: if the background Bash task itself has exited with an error (non-zero exit, or the process is gone but no `turn.completed` or `turn.failed`), **immediately call `TaskOutput(task_id, block:true, timeout=10000)` first** (same reason — dequeue the notification), then read the stderr file and report the error to the user.
 
 ### Stall Detection
 
@@ -121,16 +122,18 @@ When `turn.completed` appears, Codex is done. When `turn.failed` appears, Codex 
 grep '"type":"agent_message"' /tmp/codex-review-XXXXXXXXXX.jsonl | tail -1 | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['item']['text'])"
 ```
 
-Clean up after extracting the result — stop the background task and remove temp files:
+Clean up after extracting the result — this is **mandatory for ALL terminal paths** (`turn.completed`, `turn.failed`, process failure, stall-abort):
 
-1. **Stop the background Bash task** immediately using `TaskOutput` with the saved `task_id` and `block: false` to drain any buffered output (ignore the content — the review was already extracted from the JSONL file). Then call `TaskStop` with the same `task_id` to terminate the background task. If either call returns an error (task already exited), this is safe to ignore.
+1. **Dequeue notification (if not already done)**: call `TaskOutput` with the saved `task_id` and `block: true, timeout: 10000`. If you already called this in the polling loop (step 4), calling it again is safe — it will return immediately. This is a safety net: **the notification MUST be dequeued before your turn ends**, or it will print "Background command completed" at the end of the session.
 
-2. **Remove temp files**:
+2. **Drain and stop the background Bash task**: call `TaskOutput` with the saved `task_id` and `block: false` to drain any remaining buffered output (ignore the content). Then call `TaskStop` with the same `task_id` to terminate the background task. If either call returns an error (task already exited), this is safe to ignore.
+
+3. **Remove temp files**:
 ```bash
 rm -f /tmp/codex-review-XXXXXXXXXX.jsonl /tmp/codex-review-XXXXXXXXXX.err
 ```
 
-**Why this matters**: Without stopping the background task, its buffered output gets delivered when the conversation ends (e.g., user presses ESC), causing Claude Code to process it unnecessarily. Each round creates a new background task — you must stop each one after extracting its review.
+**Why this matters**: Background task completion notifications are enqueued when a task exits. If this notification is not consumed by `TaskOutput(block:true)` before the current turn ends, Claude Code's runtime will flush it as a visible message ("Background command completed") at session end. The two-phase approach — dequeue in polling loop (step 4) + safety-net dequeue here — ensures the notification is always consumed regardless of which code path executes. Each round creates a new background task — you must clean up each one.
 
 **NOTE**: No `-m` flag — use Codex's default model. Always use `--sandbox read-only` — Codex only needs to read files and run `git diff`. The prompt instructs Codex to only review, not modify code.
 
@@ -317,7 +320,7 @@ Then ask the user (via `AskUserQuestion`):
 | Poll progress | `tail -5 /tmp/codex-review-XXXXXXXXXX.jsonl` |
 | Extract final review | `grep '"type":"agent_message"' /tmp/codex-review-XXXXXXXXXX.jsonl \| tail -1 \| python3 -c "import sys,json; print(json.loads(sys.stdin.read())['item']['text'])"` |
 | Check errors on failure | `tail -20 /tmp/codex-review-XXXXXXXXXX.err` |
-| Stop background task | `TaskOutput(task_id=<SAVED_TASK_ID>, block=false)` then `TaskStop(task_id=<SAVED_TASK_ID>)` — call after extracting review |
+| Stop background task | `TaskOutput(task_id=<SAVED_TASK_ID>, block=true, timeout=10000)` **immediately** on terminal event (dequeues notification — MUST happen before turn ends), then `TaskOutput(block=false)` + `TaskStop(task_id=<SAVED_TASK_ID>)` after extraction, then `TaskOutput(block=true, timeout=10000)` again as safety net in cleanup |
 
 ## Important Rules
 
@@ -340,7 +343,7 @@ Then ask the user (via `AskUserQuestion`):
 17. **Summarize after every round** - The user should always know what happened before the next round begins.
 18. **Respect the diff boundary** - Only review and fix code within the uncommitted changes. Don't expand scope to unrelated code unless a change introduces a bug in connected code.
 19. **Require structured output** - If Codex's response doesn't follow the required ISSUE-{N} format, ask it to reformat in the resume prompt.
-20. **Stop background tasks after each round** - After extracting the review from the JSONL file, always drain with `TaskOutput(task_id, block: false)` then terminate with `TaskStop(task_id)`. Failing to do this causes buffered output to be delivered when the conversation ends, triggering unnecessary processing. Each round has its own `task_id` — stop each one.
+20. **Acknowledge completion then clean up after each round** - When polling detects any terminal event (`turn.completed`, `turn.failed`, or process exit), **your very first action** must be calling `TaskOutput(task_id, block:true, timeout=10000)` before extracting/reporting (ignore returned output). **This dequeues the completion notification — if skipped, it will print "Background command completed" at end of session.** This applies to ALL terminal paths — not just success. Then after extraction/reporting, always run full cleanup: `TaskOutput(task_id, block:true, timeout=10000)` (safety net) → `TaskOutput(task_id, block:false)` → `TaskStop(task_id)` → `rm -f`. Each round has its own `task_id` — handle each one.
 
 ## Error Handling
 - If `git status --porcelain` shows no changes (no modified, staged, or untracked files), inform the user and stop.
@@ -350,3 +353,4 @@ Then ask the user (via `AskUserQuestion`):
 - If the diff is too large for a single prompt, suggest splitting by file or directory.
 - If the debate stalls on a point, present both positions to the user and let them decide.
 - If `TaskOutput` or `TaskStop` returns an error when cleaning up a background task (e.g., task already exited), this is safe to ignore — the task is already gone.
+- If `TaskOutput(block:true, timeout=10000)` times out while acknowledging a terminal event, proceed with extraction/reporting anyway and run full cleanup. The task may not have fully settled — a background notification may still appear after ESC, but this is recoverable.
