@@ -3,7 +3,7 @@ set -euo pipefail
 
 # IMPORTANT: Bump CODEX_RUNNER_VERSION when changing this script.
 # embed-runner.sh checks this version string across all embed locations.
-CODEX_RUNNER_VERSION="5"
+CODEX_RUNNER_VERSION="6"
 
 # --- Exit codes ---
 EXIT_SUCCESS=0
@@ -12,6 +12,195 @@ EXIT_TIMEOUT=2
 EXIT_TURN_FAILED=3
 EXIT_STALLED=4
 EXIT_CODEX_NOT_FOUND=5
+
+# --- Extract cross-platform process helper ---
+# Helper lives alongside this script, auto-extracted if missing or version mismatch.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROC_HELPER="$SCRIPT_DIR/.codex-proc-helper.py"
+if ! python3 "$PROC_HELPER" version 2>/dev/null | grep -q "^6$"; then
+  cat > "$PROC_HELPER" <<'PROC_HELPER_PY'
+"""Cross-platform process helper for codex-runner.sh (stdlib only)."""
+import os, sys, signal, json, subprocess, time
+
+HELPER_VERSION = 6
+IS_WIN = sys.platform == 'win32'
+
+def cmd_version():
+    print(HELPER_VERSION)
+
+def cmd_launch():
+    state_dir = sys.argv[2]
+    working_dir = sys.argv[3]
+    timeout_s = int(sys.argv[4])
+    thread_id = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else ''
+    effort = sys.argv[6] if len(sys.argv) > 6 else 'high'
+
+    prompt_file = os.path.join(state_dir, 'prompt.txt')
+    jsonl_file = os.path.join(state_dir, 'output.jsonl')
+    err_file = os.path.join(state_dir, 'error.log')
+
+    if thread_id:
+        cmd = ['codex', 'exec', '--skip-git-repo-check', '--json', 'resume', thread_id]
+        cwd = working_dir
+    else:
+        cmd = ['codex', 'exec', '--skip-git-repo-check', '--json',
+               '--sandbox', 'read-only',
+               '--config', 'model_reasoning_effort=' + effort,
+               '-C', working_dir]
+        cwd = None
+
+    creation_flags = 0
+    if IS_WIN:
+        CREATE_NEW_PROCESS_GROUP = 0x00000200
+        CREATE_NO_WINDOW = 0x08000000
+        creation_flags = CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+
+    with open(prompt_file) as fin, open(jsonl_file, 'w') as fout, open(err_file, 'w') as ferr:
+        kwargs = dict(stdin=fin, stdout=fout, stderr=ferr, cwd=cwd)
+        if IS_WIN:
+            kwargs['creationflags'] = creation_flags
+        else:
+            kwargs['start_new_session'] = True
+        p = subprocess.Popen(cmd, **kwargs)
+
+    print(json.dumps({'pid': p.pid, 'pgid': p.pid}))
+
+def cmd_is_alive():
+    pid = int(sys.argv[2])
+    try:
+        if IS_WIN:
+            # os.kill(pid, 0) works on Windows for liveness check
+            os.kill(pid, 0)
+        else:
+            os.kill(pid, 0)
+        print('alive')
+    except (OSError, ProcessLookupError):
+        print('dead')
+
+def cmd_kill_tree():
+    pid = int(sys.argv[2])
+    try:
+        if IS_WIN:
+            subprocess.run(['taskkill', '/T', '/F', '/PID', str(pid)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            os.killpg(pid, signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        pass
+
+def cmd_kill_single():
+    pid = int(sys.argv[2])
+    try:
+        if IS_WIN:
+            subprocess.run(['taskkill', '/F', '/PID', str(pid)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            os.kill(pid, signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        pass
+
+def _get_cmdline(pid):
+    """Get process command line. Returns string or None."""
+    try:
+        if IS_WIN:
+            # Try PowerShell first (works on all modern Windows)
+            try:
+                result = subprocess.run(
+                    ['powershell', '-NoProfile', '-Command',
+                     f'(Get-CimInstance Win32_Process -Filter "ProcessId={pid}").CommandLine'],
+                    capture_output=True, text=True, timeout=10)
+                cmdline = result.stdout.strip()
+                if cmdline:
+                    return cmdline
+            except FileNotFoundError:
+                pass
+            # Fallback to wmic (older Windows)
+            try:
+                result = subprocess.run(
+                    ['wmic', 'process', 'where', f'ProcessId={pid}', 'get', 'CommandLine', '/value'],
+                    capture_output=True, text=True, timeout=5)
+                for line in result.stdout.splitlines():
+                    if line.startswith('CommandLine='):
+                        return line[len('CommandLine='):]
+            except FileNotFoundError:
+                pass
+            return None
+        else:
+            result = subprocess.run(['ps', '-p', str(pid), '-o', 'args='],
+                                    capture_output=True, text=True, timeout=5)
+            return result.stdout.strip() if result.returncode == 0 else None
+    except Exception:
+        return None
+
+def cmd_verify_codex():
+    pid = int(sys.argv[2])
+    try:
+        os.kill(pid, 0)
+    except (OSError, ProcessLookupError):
+        print('dead')
+        return
+    cmdline = _get_cmdline(pid)
+    if cmdline is None:
+        print('unknown')
+    elif 'codex exec' in cmdline or 'codex.exe exec' in cmdline:
+        print('verified')
+    else:
+        print('mismatch')
+
+def cmd_verify_watchdog():
+    pid = int(sys.argv[2])
+    try:
+        os.kill(pid, 0)
+    except (OSError, ProcessLookupError):
+        print('dead')
+        return
+    cmdline = _get_cmdline(pid)
+    if cmdline is None:
+        print('unknown')
+    elif 'python' in cmdline.lower() and ('time.sleep' in cmdline or 'codex-proc-helper' in cmdline):
+        print('verified')
+    else:
+        print('mismatch')
+
+def cmd_watchdog():
+    timeout_s = int(sys.argv[2])
+    target_pid = int(sys.argv[3])
+    if not IS_WIN:
+        try:
+            os.setsid()
+        except OSError:
+            pass
+    time.sleep(timeout_s)
+    # Kill the target process tree
+    try:
+        if IS_WIN:
+            subprocess.run(['taskkill', '/T', '/F', '/PID', str(target_pid)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            os.killpg(target_pid, signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        pass
+
+if __name__ == '__main__':
+    subcmd = sys.argv[1] if len(sys.argv) > 1 else ''
+    dispatch = {
+        'version': cmd_version,
+        'launch': cmd_launch,
+        'is-alive': cmd_is_alive,
+        'kill-tree': cmd_kill_tree,
+        'kill-single': cmd_kill_single,
+        'verify-codex': cmd_verify_codex,
+        'verify-watchdog': cmd_verify_watchdog,
+        'watchdog': cmd_watchdog,
+    }
+    fn = dispatch.get(subcmd)
+    if fn:
+        fn()
+    else:
+        print(f'Unknown subcommand: {subcmd}', file=sys.stderr)
+        sys.exit(1)
+PROC_HELPER_PY
+fi
 
 # --- Subcommand dispatch ---
 case "${1:-}" in
@@ -78,66 +267,35 @@ if [[ "${do_start:-}" == 1 ]]; then
   startup_cleanup() {
     local pgid="${CODEX_PGID:-}"
     if [[ -n "$pgid" ]]; then
-      kill -TERM -"$pgid" 2>/dev/null || true
+      python3 "$PROC_HELPER" kill-tree "$pgid" 2>/dev/null || true
     fi
     local wpid="${WATCHDOG_PID:-}"
-    if [[ -n "$wpid" ]] && kill -0 "$wpid" 2>/dev/null; then
-      kill "$wpid" 2>/dev/null || true
+    if [[ -n "$wpid" ]]; then
+      local wpid_status
+      wpid_status=$(python3 "$PROC_HELPER" is-alive "$wpid" 2>/dev/null || echo "dead")
+      if [[ "$wpid_status" == "alive" ]]; then
+        python3 "$PROC_HELPER" kill-single "$wpid" 2>/dev/null || true
+      fi
     fi
     rm -rf "$STATE_DIR"
   }
   trap startup_cleanup EXIT
 
-  # --- Detach Codex process via Python3 launcher ---
-  LAUNCH_RESULT=$(python3 -c "
-import os, sys, json, subprocess
-
-state_dir = sys.argv[1]
-working_dir = sys.argv[2]
-timeout_s = int(sys.argv[3])
-thread_id = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else ''
-effort = sys.argv[5] if len(sys.argv) > 5 else 'high'
-
-prompt_file = os.path.join(state_dir, 'prompt.txt')
-jsonl_file = os.path.join(state_dir, 'output.jsonl')
-err_file = os.path.join(state_dir, 'error.log')
-
-if thread_id:
-    cmd = ['codex', 'exec', '--skip-git-repo-check', '--json', 'resume', thread_id]
-    cwd = working_dir
-else:
-    cmd = ['codex', 'exec', '--skip-git-repo-check', '--json',
-           '--sandbox', 'read-only',
-           '--config', 'model_reasoning_effort=' + effort,
-           '-C', working_dir]
-    cwd = None
-
-with open(prompt_file) as fin, open(jsonl_file, 'w') as fout, open(err_file, 'w') as ferr:
-    p = subprocess.Popen(cmd, stdin=fin, stdout=fout, stderr=ferr,
-                         cwd=cwd, start_new_session=True)
-
-print(json.dumps({'pid': p.pid, 'pgid': p.pid}))
-" "$STATE_DIR" "$WORKING_DIR" "$TIMEOUT" "$THREAD_ID" "$EFFORT")
+  # --- Detach Codex process via cross-platform helper ---
+  LAUNCH_RESULT=$(python3 "$PROC_HELPER" launch "$STATE_DIR" "$WORKING_DIR" "$TIMEOUT" "$THREAD_ID" "$EFFORT")
 
   CODEX_PID=$(echo "$LAUNCH_RESULT" | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['pid'])")
   CODEX_PGID=$(echo "$LAUNCH_RESULT" | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['pgid'])")
 
   # --- Watchdog timeout (detached) ---
-  python3 -c "
-import os, signal, time, sys
-os.setsid()
-time.sleep(int(sys.argv[1]))
-try:
-    os.killpg(int(sys.argv[2]), signal.SIGTERM)
-except ProcessLookupError:
-    pass
-" "$TIMEOUT" "$CODEX_PGID" &
+  python3 "$PROC_HELPER" watchdog "$TIMEOUT" "$CODEX_PGID" &
   WATCHDOG_PID=$!
   disown $WATCHDOG_PID 2>/dev/null || true
 
   # --- Verify process is alive ---
   sleep 1
-  if ! kill -0 "$CODEX_PID" 2>/dev/null; then
+  ALIVE_CHECK=$(python3 "$PROC_HELPER" is-alive "$CODEX_PID" 2>/dev/null || echo "dead")
+  if [[ "$ALIVE_CHECK" != "alive" ]]; then
     echo "Error: Codex process died immediately after launch" >&2
     # startup_cleanup trap will handle the rest
     exit $EXIT_ERROR
@@ -264,9 +422,10 @@ print(s.get('thread_id', ''))
   NOW=$(date +%s)
   ELAPSED=$((NOW - STARTED_AT))
 
-  # --- Check if PID is alive ---
+  # --- Check if PID is alive (cross-platform) ---
   PROCESS_ALIVE=1
-  if ! kill -0 "$CODEX_PID" 2>/dev/null; then
+  ALIVE_CHECK=$(python3 "$PROC_HELPER" is-alive "$CODEX_PID" 2>/dev/null || echo "dead")
+  if [[ "$ALIVE_CHECK" != "alive" ]]; then
     PROCESS_ALIVE=0
   fi
 
@@ -285,41 +444,26 @@ print(s.get('thread_id', ''))
     NEW_STALL_COUNT=0
   fi
 
-  # --- Helper: verify PID belongs to codex before killing ---
-  # Uses ps -o args= to check full command line for "codex exec" pattern.
-  # Verifies PGID matches expected value to prevent killing wrong process group.
-  # Falls back to kill-by-existence if ps is unavailable (e.g., sandboxed environments).
+  # --- Helper: verify PID belongs to codex before killing (cross-platform) ---
   verify_and_kill_codex() {
     local pid="$1" pgid="$2"
-    if ! kill -0 "$pid" 2>/dev/null; then return 0; fi
-    local args current_pgid
-    args=$(ps -p "$pid" -o args= 2>/dev/null || true)
-    if [[ -z "$args" ]]; then
-      # ps unavailable — fallback to kill-by-existence (original behavior)
-      kill -TERM -"$pgid" 2>/dev/null || true
-      return 0
-    fi
-    if [[ "$args" == *"codex exec"* ]]; then
-      # Verify PGID matches before killing the group
-      current_pgid=$(ps -p "$pid" -o pgid= 2>/dev/null | tr -d ' ' || true)
-      if [[ "$current_pgid" == "$pgid" ]]; then
-        kill -TERM -"$pgid" 2>/dev/null || true
-      fi
-    fi
+    local status
+    status=$(python3 "$PROC_HELPER" verify-codex "$pid" 2>/dev/null || echo "dead")
+    case "$status" in
+      dead) return 0 ;;
+      verified|unknown) python3 "$PROC_HELPER" kill-tree "$pgid" 2>/dev/null || true ;;
+      mismatch) ;; # PID reused by different process — do not kill
+    esac
   }
   verify_and_kill_watchdog() {
     local pid="$1"
-    if ! kill -0 "$pid" 2>/dev/null; then return 0; fi
-    local args
-    args=$(ps -p "$pid" -o args= 2>/dev/null || true)
-    if [[ -z "$args" ]]; then
-      # ps unavailable — fallback
-      kill "$pid" 2>/dev/null || true
-      return 0
-    fi
-    if [[ "$args" == *python* && "$args" == *"time.sleep"* ]]; then
-      kill "$pid" 2>/dev/null || true
-    fi
+    local status
+    status=$(python3 "$PROC_HELPER" verify-watchdog "$pid" 2>/dev/null || echo "dead")
+    case "$status" in
+      dead) return 0 ;;
+      verified|unknown) python3 "$PROC_HELPER" kill-single "$pid" 2>/dev/null || true ;;
+      mismatch) ;;
+    esac
   }
 
   # --- Helper: write final.txt and kill processes ---
@@ -464,7 +608,7 @@ elif not process_alive:
         print(f'POLL:failed:{elapsed}s:1:{error_msg}')
 else:
     print(f'POLL:running:{elapsed}s')
-" "$STATE_DIR" "$LAST_LINE_COUNT" "$ELAPSED" "$PROCESS_ALIVE" "$TIMEOUT" 2>&2)
+" "$STATE_DIR" "$LAST_LINE_COUNT" "$ELAPSED" "$PROCESS_ALIVE" "$TIMEOUT")
 
   # Parse first line for status
   POLL_STATUS=$(echo "$POLL_OUTPUT" | head -1 | cut -d: -f2)
@@ -567,30 +711,19 @@ print(s.get('watchdog_pid', ''))
     CODEX_PGID=$(echo "$STOP_VALS" | sed -n '2p')
     WATCHDOG_PID=$(echo "$STOP_VALS" | sed -n '3p')
 
-    # Kill Codex process group (verify identity + PGID via ps to avoid PID reuse)
-    if [[ -n "$CODEX_PID" && -n "$CODEX_PGID" ]] && kill -0 "$CODEX_PID" 2>/dev/null; then
-      STOP_ARGS=$(ps -p "$CODEX_PID" -o args= 2>/dev/null || true)
-      if [[ -z "$STOP_ARGS" ]]; then
-        # ps unavailable — fallback to kill-by-existence
-        kill -TERM -"$CODEX_PGID" 2>/dev/null || true
-        sleep 1
-        kill -KILL -"$CODEX_PGID" 2>/dev/null || true
-      elif [[ "$STOP_ARGS" == *"codex exec"* ]]; then
-        # Verify PGID matches before killing the group
-        STOP_CURRENT_PGID=$(ps -p "$CODEX_PID" -o pgid= 2>/dev/null | tr -d ' ' || true)
-        if [[ "$STOP_CURRENT_PGID" == "$CODEX_PGID" ]]; then
-          kill -TERM -"$CODEX_PGID" 2>/dev/null || true
-          sleep 1
-          kill -KILL -"$CODEX_PGID" 2>/dev/null || true
-        fi
+    # Kill Codex process group (verify identity via cross-platform helper)
+    if [[ -n "$CODEX_PID" && -n "$CODEX_PGID" ]]; then
+      VERIFY_STATUS=$(python3 "$PROC_HELPER" verify-codex "$CODEX_PID" 2>/dev/null || echo "dead")
+      if [[ "$VERIFY_STATUS" == "verified" || "$VERIFY_STATUS" == "unknown" ]]; then
+        python3 "$PROC_HELPER" kill-tree "$CODEX_PGID" 2>/dev/null || true
       fi
     fi
 
     # Kill watchdog (verify identity)
-    if [[ -n "$WATCHDOG_PID" ]] && kill -0 "$WATCHDOG_PID" 2>/dev/null; then
-      STOP_WD_ARGS=$(ps -p "$WATCHDOG_PID" -o args= 2>/dev/null || true)
-      if [[ -z "$STOP_WD_ARGS" || ( "$STOP_WD_ARGS" == *python* && "$STOP_WD_ARGS" == *"time.sleep"* ) ]]; then
-        kill "$WATCHDOG_PID" 2>/dev/null || true
+    if [[ -n "$WATCHDOG_PID" ]]; then
+      VERIFY_WD=$(python3 "$PROC_HELPER" verify-watchdog "$WATCHDOG_PID" 2>/dev/null || echo "dead")
+      if [[ "$VERIFY_WD" == "verified" || "$VERIFY_WD" == "unknown" ]]; then
+        python3 "$PROC_HELPER" kill-single "$WATCHDOG_PID" 2>/dev/null || true
       fi
     fi
   fi
@@ -655,9 +788,13 @@ if [[ "${do_legacy:-}" == 1 ]]; then
 
   cleanup() {
     local codex_pid_local="${CODEX_PID:-}"
-    if [[ -n "$codex_pid_local" ]] && kill -0 "$codex_pid_local" 2>/dev/null; then
-      kill "$codex_pid_local" 2>/dev/null || true
-      wait "$codex_pid_local" 2>/dev/null || true
+    if [[ -n "$codex_pid_local" ]]; then
+      local alive_status
+      alive_status=$(python3 "$PROC_HELPER" is-alive "$codex_pid_local" 2>/dev/null || echo "dead")
+      if [[ "$alive_status" == "alive" ]]; then
+        python3 "$PROC_HELPER" kill-single "$codex_pid_local" 2>/dev/null || true
+        wait "$codex_pid_local" 2>/dev/null || true
+      fi
     fi
     rm -f "$JSONL_FILE" "$ERR_FILE"
   }
@@ -692,11 +829,12 @@ if [[ "${do_legacy:-}" == 1 ]]; then
 
     if [[ $ELAPSED -ge $TIMEOUT ]]; then
       echo "[${ELAPSED}s] Error: timeout after ${TIMEOUT}s" >&2
-      kill "$CODEX_PID" 2>/dev/null || true
+      python3 "$PROC_HELPER" kill-single "$CODEX_PID" 2>/dev/null || true
       exit $EXIT_TIMEOUT
     fi
 
-    if ! kill -0 "$CODEX_PID" 2>/dev/null; then
+    ALIVE_CHECK=$(python3 "$PROC_HELPER" is-alive "$CODEX_PID" 2>/dev/null || echo "dead")
+    if [[ "$ALIVE_CHECK" != "alive" ]]; then
       wait "$CODEX_PID" 2>/dev/null || true
       CODEX_PID=""
       break
@@ -718,7 +856,7 @@ if [[ "${do_legacy:-}" == 1 ]]; then
 
     if [[ $STALL_COUNT -ge 12 ]]; then
       echo "[${ELAPSED}s] Error: stalled — no new output for ~3 minutes" >&2
-      kill "$CODEX_PID" 2>/dev/null || true
+      python3 "$PROC_HELPER" kill-single "$CODEX_PID" 2>/dev/null || true
       exit $EXIT_STALLED
     fi
 
