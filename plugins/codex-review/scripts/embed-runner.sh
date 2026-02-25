@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# embed-runner.sh — Reads scripts/codex-runner.sh and verifies that both SKILL.md files
-# and hooks/hooks.json contain matching embedded content.
+# embed-runner.sh — Verifies that all SKILL.md files and hooks/hooks.json contain
+# the correct CODEX_RUNNER_VERSION string from scripts/codex-runner.sh (version drift check).
 #
 # Usage:
 #   ./embed-runner.sh          # Check only (exit 1 if drift detected)
@@ -36,7 +36,8 @@ ERRORS=0
 # Check SKILL.md files contain the correct version string
 for SKILL_FILE in \
   "$PLUGIN_DIR/skills/codex-plan-review/SKILL.md" \
-  "$PLUGIN_DIR/skills/codex-impl-review/SKILL.md"; do
+  "$PLUGIN_DIR/skills/codex-impl-review/SKILL.md" \
+  "$PLUGIN_DIR/skills/codex-think-about/SKILL.md"; do
 
   if [[ ! -f "$SKILL_FILE" ]]; then
     echo "WARNING: Skill file not found: $SKILL_FILE" >&2

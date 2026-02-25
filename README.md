@@ -1,8 +1,10 @@
 # codex_skill
 
-Claude Code plugin that uses OpenAI Codex CLI as an adversarial reviewer. Two skills: one reviews your implementation plan before you write code, the other reviews your code changes before you commit.
+Claude Code plugin that uses OpenAI Codex CLI as an adversarial reviewer and peer thinker. Three skills orchestrate multi-round debates between Claude Code and Codex until consensus:
 
-Both skills run multiple debate rounds — Codex finds issues, Claude Code fixes or rebuts, Codex re-reviews — until they reach consensus.
+- **Plan review** — reviews your implementation plan before you write code
+- **Impl review** — reviews your code changes before you commit
+- **Think-about** — peer debate on any question (both AIs think independently, discuss, reach consensus or present disagreements)
 
 ## Skills
 
@@ -10,6 +12,7 @@ Both skills run multiple debate rounds — Codex finds issues, Claude Code fixes
 | --- | --- |
 | `/codex-plan-review` | Codex reviews your implementation plan. Claude Code and Codex debate until the plan is solid, then you implement. |
 | `/codex-impl-review` | Codex reviews your uncommitted code changes. Claude Code fixes valid issues and pushes back on invalid ones. Repeats until consensus. |
+| `/codex-think-about` | Both AIs think independently about a question, then discuss until they reach consensus or present their disagreements to you. |
 
 ## Requirements
 
@@ -28,7 +31,7 @@ Both skills run multiple debate rounds — Codex finds issues, Claude Code fixes
 
 ### Verify installation
 
-Start Claude Code and type `/codex-plan-review` or `/codex-impl-review`. If the skills load, you're set.
+Start Claude Code and type `/codex-plan-review`, `/codex-impl-review`, or `/codex-think-about`. If the skills load, you're set.
 
 ## Usage
 
@@ -52,6 +55,15 @@ Start Claude Code and type `/codex-plan-review` or `/codex-impl-review`. If the 
 6. Debate continues until consensus.
 7. You accept and commit, or request more rounds.
 
+### `/codex-think-about` — Peer debate on any question
+
+1. Run `/codex-think-about`.
+2. Describe the question or topic you want both AIs to think about.
+3. Choose reasoning effort (low / medium / high / deep).
+4. Both Claude Code and Codex think independently, then exchange perspectives.
+5. They discuss until they reach consensus or detect a stalemate.
+6. You get a summary of agreed points, disagreements, and key insights.
+
 ## How it works
 
 ```
@@ -60,19 +72,19 @@ Start Claude Code and type `/codex-plan-review` or `/codex-impl-review`. If the 
 │ Claude Code │                                        │  Codex CLI  │
 │  (Claude)   │ ◄────────────────────────────────────── │  (GPT)      │
 │             │     structured review (ISSUE-{N})      │             │
-└─────────────┘                                        └─────────────┘
+└─────────────┘     or thinking session (think-about)  └─────────────┘
        │                                                      ▲
-       │  fixes code / updates plan                           │
-       │  rebuts invalid points                               │
+       │  fixes code / updates plan (review skills)           │
+       │  agrees / disagrees / adds perspective (think-about) │
        └──────────────────────────────────────────────────────┘
                         repeat until consensus
 ```
 
 Key design decisions:
 - **Codex reads files directly** — the prompt only contains file paths, user context, and session info. No bloated prompts with pasted diffs or plan content.
-- **Structured output** — Codex must respond in `ISSUE-{N}` format with category, severity, description, reasoning, and suggested fix.
+- **Structured output** — Review skills use `ISSUE-{N}` format with category, severity, description, reasoning, and suggested fix. Think-about uses a thinking-session format (key insights, considerations, recommendations).
 - **Default model** — always uses Codex's configured default model. No model selection prompt.
-- **Automatic debate loop** — after each fix, Claude Code automatically sends updated code/plan back to Codex for re-review. The loop runs until Codex returns APPROVE. No manual intervention needed between rounds. Stalemate detection stops infinite loops.
+- **Automatic debate loop** — Review skills: after each fix, Claude Code automatically sends updated code/plan back to Codex for re-review, looping until Codex returns APPROVE. Think-about: both AIs exchange perspectives until consensus or stalemate. No manual intervention needed between rounds.
 - **Background + progress polling** — Codex runs in background with `--json` output. Claude Code polls the JSONL stream every ~60 seconds and reports progress to the user (what Codex is thinking, which commands it's running). No hardcoded timeouts.
 
 ## Project structure
@@ -83,13 +95,21 @@ Key design decisions:
 │   └── marketplace.json
 ├── plugins/
 │   └── codex-review/
+│       ├── .claude-plugin/
+│       │   └── plugin.json
 │       ├── hooks/
 │       │   └── hooks.json
+│       ├── scripts/
+│       │   ├── codex-runner.sh
+│       │   └── embed-runner.sh
 │       └── skills/
 │           ├── codex-plan-review/
 │           │   └── SKILL.md
-│           └── codex-impl-review/
+│           ├── codex-impl-review/
+│           │   └── SKILL.md
+│           └── codex-think-about/
 │               └── SKILL.md
+├── CLAUDE.md
 └── README.md
 ```
 

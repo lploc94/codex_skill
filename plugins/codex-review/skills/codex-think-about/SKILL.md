@@ -1,21 +1,18 @@
 ---
-name: codex-plan-review
-description: Debate implementation plans between Claude Code and Codex CLI. After Claude Code creates a plan, invoke this skill to have Codex review it. Both AIs debate through multiple rounds until reaching full consensus before implementation begins. This skill CAN and SHOULD be invoked while still in plan mode — do NOT exit plan mode before calling this skill.
+name: codex-think-about
+description: Peer debate between Claude Code and Codex CLI on any question. Both AIs think independently, then discuss and refine until reaching consensus or presenting their disagreements for the user to resolve.
 ---
 
-# Codex Plan Review — Skill Guide
+# Codex Think About — Skill Guide
 
 ## Overview
-This skill orchestrates an adversarial debate between Claude Code and OpenAI Codex CLI to stress-test implementation plans. The goal is to catch flaws, blind spots, and improvements **before** any code is written.
+This skill orchestrates a **peer debate** between Claude Code and OpenAI Codex CLI on any question or topic. Unlike the review skills where one side reviews and the other implements, here both AIs are **equal thinkers** — each forms independent perspectives, then they discuss, refine, and challenge each other's reasoning until reaching consensus or identifying irreducible disagreements.
 
-**Flow:** Claude Code's plan → Codex reviews → Claude Code rebuts → Codex rebuts → ... → Consensus → Implement
+**Codex and Claude Code are EQUAL PEERS.** Neither is the reviewer or the implementer. Both contribute ideas, evidence, and counterarguments.
+
+**Flow:** User question → Claude Code gathers factual context → Codex thinks independently → Claude Code responds with own perspective → Codex responds → ... → Consensus or Stalemate → Present to user
 
 ## Prerequisites
-
-> **Plan Mode Compatible:** This skill works fully within plan mode. Do NOT exit plan mode before invoking this skill. The debate should complete while still in plan mode, so the consensus result can inform the final plan before implementation begins.
-
-- You (Claude Code) must already have a plan ready. If no plan exists yet, ask the user to create one first (e.g., via plan mode or `/plan`).
-- The plan must be saved to a file that Codex can read (e.g., `plan.md`, `.claude/plan.md`, or the plan mode output file).
 - The Codex CLI (`codex`) must be installed and available in PATH.
 
 ## Codex Runner Script
@@ -1022,6 +1019,7 @@ print(json.dumps({'thread_id': os.environ.get('THREAD_ID_VAL', ''), 'review': te
   echo "CODEX_RESULT:${REVIEW_JSON}"
   exit $EXIT_SUCCESS
 fi
+
 ```
 
 ### Runner Output Format
@@ -1055,34 +1053,32 @@ Progress events are written to stderr in format `[Xs] message` — these are vis
 - `timeout` — Exceeded timeout (default 3600s)
 - `stalled` — No new output for ~3 minutes
 
-## Step 1: Gather Configuration
+## Step 1: Parse Query & Gather Config
 
-Ask the user (via `AskUserQuestion`) **only one question**:
-- Which reasoning effort to use (`xhigh`, `high`, `medium`, or `low`)
+1. The query comes from the skill invocation: `/codex-think-about <query>`
+2. If the query is empty, ask the user via `AskUserQuestion` what they want to think about.
+3. Ask the user (via `AskUserQuestion`) **only one question**: effort level.
+
+Effort level options:
+- **low** — Quick initial thoughts (maps to Codex `model_reasoning_effort=low`)
+- **medium** — Balanced analysis (maps to Codex `model_reasoning_effort=medium`)
+- **high** — Deep thinking (maps to Codex `model_reasoning_effort=high`) (Recommended)
+- **deep** — Maximum reasoning effort (maps to Codex `model_reasoning_effort=high`)
 
 **Do NOT ask** which model to use — always use Codex's default model (no `-m` flag).
-**Do NOT ask** how many rounds — the loop runs automatically until consensus.
 
-## Step 2: Prepare the Plan
+## Step 2: Gather Factual Context (NO opinion, NO analysis)
 
-1. Ensure the plan is saved to a file in the project directory. If the plan only exists in conversation, write it to a file first (e.g., `.claude/plan.md`).
-2. Note the **absolute path** to the plan file — you will pass this path to Codex so it can read the file itself.
-3. **Do NOT paste the plan content into the Codex prompt.** Codex will read the file directly.
+Claude Code gathers **facts only** so Codex has context without being biased by Claude Code's perspective. This keeps Codex's initial thinking independent.
 
-## Prompt Construction Principle
+Collect:
+1. **Project info** — language, framework, key directories. Factual only.
+2. **Conversation facts** — constraints the user mentioned, decisions already made, tech stack, file paths referenced. Only record facts, do NOT interpret or analyze.
+3. **Relevant files** (if the query relates to code) — find 3-8 relevant file paths with a one-line factual description each. Do NOT paste code content, do NOT add commentary. If the query is purely conceptual, skip this.
 
-**Only include in the Codex prompt what Codex cannot access on its own:**
-- The path to the plan file (so Codex knows where to read it)
-- The user's original request / task description
-- Important context from the conversation: user comments, constraints, preferences, architectural decisions discussed verbally
-- Any clarifications or special instructions the user gave
+**Principle**: Only send what Codex cannot access on its own. Keep Codex thinking **independently**.
 
-**Do NOT include:**
-- The plan content itself (Codex reads the file)
-- Code snippets Codex can read from the repo
-- Information Codex can derive by reading files
-
-## Step 3: Send Plan to Codex for Review (Round 1)
+## Step 3: Send to Codex — Round 1 (start/poll/stop)
 
 ### Step 3a — Start Codex
 
@@ -1106,8 +1102,8 @@ RUNNER_SCRIPT
   mv "$TMP" "$HOME/.local/bin/codex-runner.sh"
   RUNNER="$HOME/.local/bin/codex-runner.sh"
 fi
-"$RUNNER" start --working-dir <WORKING_DIR> --effort <EFFORT> <<'EOF'
-<REVIEW_PROMPT>
+"$RUNNER" start --working-dir <WORKING_DIR> --effort <EFFORT> --timeout 1800 <<'EOF'
+<THINKING_PROMPT>
 EOF
 ```
 
@@ -1124,11 +1120,11 @@ sleep 60 && "$RUNNER" poll <STATE_DIR>
 ```
 
 After each poll:
-- stdout starts with `POLL:running:` → Codex is still working. The stderr output shows progress events like `[45s] Codex running: cat plan.md`. Call poll again — use `sleep 30` for the second poll, then `sleep 15` for all subsequent polls.
-- stdout starts with `POLL:completed:` → Extract thread_id from the `THREAD_ID:` line. Read the review from `<STATE_DIR>/review.txt` using the Read tool. Proceed to Step 3c.
-- stdout starts with `POLL:failed:` or `POLL:timeout:` or `POLL:stalled:` → Handle per Error Handling section. Call `stop` to cleanup.
+- stdout starts with `POLL:running:` → Codex is still working. Call poll again — use `sleep 30` for the second poll, then `sleep 15` for all subsequent polls.
+- stdout starts with `POLL:completed:` → Extract thread_id from the `THREAD_ID:` line. Read the analysis from `<STATE_DIR>/review.txt` using the Read tool. Proceed to Step 3c.
+- stdout starts with `POLL:failed:` or `POLL:timeout:` or `POLL:stalled:` → Handle per Error Handling section.
 
-**Progress reporting**: The stderr output from the Bash tool call shows progress events (e.g., `[45s] Codex is thinking...`, `[52s] Codex running: cat plan.md`). Summarize these for the user between polls.
+**Progress reporting**: Summarize progress events from stderr for the user between polls.
 
 ### Step 3c — Cleanup
 
@@ -1138,77 +1134,81 @@ After extracting the completed result (or handling an error):
 "$RUNNER" stop <STATE_DIR>
 ```
 
-This kills any remaining processes and removes the state directory.
+Save the `thread_id` — you will need it for subsequent rounds.
 
-Save the `thread_id` from the `THREAD_ID:` line — you will need it for subsequent rounds.
+After cleanup, **summarize Codex's analysis for the user** (progress update).
 
-### Review Prompt Template
+### Codex Prompt Template (Round 1)
 
 ```
-You are participating in a plan review debate with Claude Code (Claude Opus 4.6).
+You are an independent technical thinker participating in a peer discussion with Claude Code (Claude Opus 4.6).
 
 ## Your Role
-You are the REVIEWER. Your job is to critically evaluate an implementation plan. Be thorough, constructive, and specific.
+Think deeply and independently about the question below. You and Claude Code are EQUAL PEERS — neither is the authority. Your value comes from independent analysis. After this round, Claude Code will respond with its own perspective, and you will discuss until you reach agreement or identify where you fundamentally disagree.
 
-## Plan Location
-Read the implementation plan from: <ABSOLUTE_PATH_TO_PLAN_FILE>
+## Question
+<USER_QUERY>
 
-## User's Original Request
-<The user's original task/request that prompted this plan>
+## Project Context
+<Language, framework, key components. "N/A" if not project-specific.>
 
-## Session Context
-<Any important context from the conversation that Codex cannot access on its own>
+## Relevant Files
+<File paths with one-line descriptions, or "No specific files — general question.">
 
-(If there is no additional context beyond the plan file, write "No additional context — the plan file is self-contained.")
+## Known Constraints
+<Factual constraints from conversation — decisions already made, requirements, limitations. NO opinions from Claude Code.>
 
 ## Instructions
-1. Read the plan file above.
-2. Read any source files referenced in the plan to understand the current codebase state.
-3. Analyze the plan and produce your review in the EXACT format below.
+1. Read relevant files if listed.
+2. Think independently. Consider: multiple approaches, trade-offs, edge cases, what the asker might not have considered.
+3. Produce analysis in the format below.
 
 ## Required Output Format
 
-For each issue found, use this structure:
+### Key Insights
+1. [Insight with evidence]
+...
 
-### ISSUE-{N}: {Short title}
-- **Category**: Critical Issue | Improvement | Question
-- **Severity**: CRITICAL | HIGH | MEDIUM | LOW
-- **Plan Reference**: Step {X} / Section "{name}" / Decision "{name}"
-- **Description**: What the problem is, in detail.
-- **Why It Matters**: Concrete scenario showing how this causes a real failure, bug, or degraded outcome.
-- **Suggested Fix**: Specific proposed change to the plan. (Required for Critical Issue and Improvement. Optional for Question.)
+### Considerations
+- **[Aspect]**: [Analysis]
+...
 
-After all issues, provide:
+### Recommendations
+1. [Actionable recommendation]
+...
 
-### VERDICT
-- **Result**: REJECT | APPROVE_WITH_CHANGES | APPROVE
-- **Summary**: 2-3 sentence overall assessment.
+### Open Questions
+- [Question warranting further exploration]
+...
+
+### Confidence Level
+[HIGH | MEDIUM | LOW] — [Explanation]
 
 Rules:
-- Be specific: reference exact steps, file paths, or decisions in the plan.
-- Do NOT rubber-stamp the plan. Your value comes from finding real problems.
-- Do NOT raise vague concerns without concrete scenarios.
-- Every Critical Issue MUST have a Suggested Fix.
+- Be specific, not abstract. Reference actual files when relevant.
+- Acknowledge uncertainty honestly.
+- Focus on 3-5 most important dimensions.
+- Take clear positions where you have evidence — do NOT hedge everything.
 ```
 
-**After receiving Codex's review**, summarize it for the user before proceeding.
+## Step 4: Claude Code Responds
 
-## Step 4: Claude Code Rebuts (Round 1)
+After reading Codex's analysis from `<STATE_DIR>/review.txt`:
 
-After receiving Codex's review, you (Claude Code) must:
+1. **Analyze each point** Codex raised.
+2. **Agree** with points that are well-reasoned — state "Agree with Codex because..."
+3. **Disagree** with points where you have counter-evidence — provide your own reasoning and evidence.
+4. **Add** perspectives Codex missed — introduce new insights or dimensions.
+5. **Synthesize**: Clearly identify what is consensus and what is disagreement.
+6. **Summarize for the user** before sending to Codex.
 
-1. **Carefully analyze** each ISSUE Codex raised.
-2. **Accept valid criticisms** - If Codex found real issues, acknowledge them and update the plan file.
-3. **Push back on invalid points** - If you disagree with Codex's assessment, explain why with evidence. Use your own knowledge, web search, or documentation to support your position.
-4. **Update the plan file** with accepted changes (use Edit tool).
-5. **Summarize** for the user what you accepted, what you rejected, and why.
-6. **Immediately proceed to Step 5** — do NOT ask the user whether to continue. Always send the updated plan back to Codex for re-review.
+**Disagreement tracking**: Maintain a registry across rounds:
+- Each disagreement gets an ID (D-1, D-2, ...), a status (open/resolved), and the round it was last changed.
+- "Progress" means at least one of: a disagreement resolved, new evidence added, or a new dimension raised.
 
-## Step 5: Continue the Debate (Rounds 2+)
+## Step 5: Send Response to Codex — Round 2+ (resume thread)
 
 ### Step 5a — Start Codex (resume)
-
-Run the runner with `--thread-id` to resume the existing Codex conversation:
 
 ```bash
 RUNNER="${CODEX_RUNNER:-$HOME/.local/bin/codex-runner.sh}"
@@ -1228,8 +1228,8 @@ RUNNER_SCRIPT
   mv "$TMP" "$HOME/.local/bin/codex-runner.sh"
   RUNNER="$HOME/.local/bin/codex-runner.sh"
 fi
-"$RUNNER" start --working-dir <WORKING_DIR> --effort <EFFORT> --thread-id <THREAD_ID> <<'EOF'
-<REBUTTAL_PROMPT>
+"$RUNNER" start --working-dir <WORKING_DIR> --effort <EFFORT> --timeout 1800 --thread-id <THREAD_ID> <<'EOF'
+<RESPONSE_PROMPT>
 EOF
 ```
 
@@ -1243,101 +1243,134 @@ Same as Step 3b — poll until completed, then proceed to Step 5c.
 "$RUNNER" stop <STATE_DIR>
 ```
 
-### Rebuttal Prompt Template
+Read Codex's response from `<STATE_DIR>/review.txt`, then return to Step 4.
+
+If timeout/stall/fail occurs, retry once per Error Handling policy (timeout → double to 3600s; failed/stalled → same timeout).
+
+### Response Prompt Template (Round 2+ — Claude Code → Codex)
 
 ```
-This is Claude Code (Claude Opus 4.6) responding to your review.
+This is Claude Code (Claude Opus 4.6) responding to your analysis. We are peer thinkers discussing the same question.
 
-## Issues Accepted & Fixed
-<For each accepted issue, reference by ISSUE-{N} and describe what was changed in the plan>
+## Points I Agree With
+<For each agreed point, reference which insight/recommendation and briefly explain why>
 
-## Issues Disputed
-<For each disputed issue, reference by ISSUE-{N} and explain why with evidence>
+## Points I Disagree With
+<For each disagreement, reference the specific point and provide counter-reasoning with evidence>
+
+## Additional Perspectives
+<New insights or dimensions Claude Code identified that Codex didn't cover>
+
+## Current Status
+- **Agreed**: [list of consensus points]
+- **Disagreed**: [list of remaining disagreements]
 
 ## Your Turn
-Re-read the plan file (same path as before) to see the updated plan, then re-review.
-- Have your previous concerns been properly addressed?
-- Do the changes introduce any NEW issues?
-- Are there any remaining problems?
+Consider my responses above. For points of disagreement:
+- If my reasoning is convincing, feel free to update your position.
+- If you still disagree, explain why with additional evidence.
+- If we're going in circles on a point, say so explicitly.
 
-Use the same output format as before (ISSUE-{N} structure + VERDICT).
-Verdict options: REJECT | APPROVE_WITH_CHANGES | APPROVE
+For new perspectives I raised:
+- Share your thoughts — agree, disagree, or expand.
+
+Use the same output format as before (Key Insights, Considerations, Recommendations, Open Questions, Confidence Level).
+Add a section at the end:
+
+### Discussion Status
+- **Consensus Points**: [points both sides now agree on]
+- **Remaining Disagreements**: [points still contested]
+- **New Points**: [any new dimensions raised in this round]
 ```
 
-**After each Codex response:**
-1. Summarize Codex's response for the user.
-2. If Codex's verdict is `APPROVE` → proceed to Step 6.
-3. If Codex's verdict is `APPROVE_WITH_CHANGES` → address the suggestions, then **automatically** send one more round to Codex for confirmation. Do NOT ask the user.
-4. If Codex's verdict is `REJECT` → address the issues and **automatically** continue to next round. Do NOT ask the user.
+## Auto-loop & Termination
 
-**IMPORTANT**: The debate loop is fully automatic. After fixing issues or updating the plan, ALWAYS send it back to Codex without asking the user. The loop only stops when Codex returns `APPROVE`. The user is only consulted at the very end (Step 6) or if a stalemate is detected.
+The debate loop runs **fully automatically** — do NOT ask the user between rounds. The user is only informed via progress summaries after each round.
 
-### Early Termination & Round Extension
+### Consensus Detection
 
-- **Early termination**: If Codex returns `APPROVE`, end the debate immediately and proceed to Step 6.
-- **Round extension**: There is no hard round limit. Continue the fix → re-review loop until either:
-  - Codex returns `APPROVE`, OR
-  - The same points go back and forth without progress for 2 consecutive rounds (stalemate detected) → present the disagreement to the user and let them decide.
+After each round, check:
+- All disagreements resolved → **CONSENSUS** → Step 6
+- Codex explicitly agrees / says "no further concerns" → **CONSENSUS** → Step 6
 
-**Repeat** Steps 4-5 until consensus or stalemate.
+### Stalemate Detection
 
-## Step 6: Finalize and Report
+- Same disagreements remain open AND no progress (per definition above) for **2 consecutive rounds** → **STALEMATE** → Step 6
 
-After the debate concludes, present the user with a **Debate Summary**:
+### Hard Cap
+
+Maximum **6 Codex turns** (codex_turns) as a safety net:
+- Turn 1: Codex initial thinking
+- Turn 2: Codex responds to Claude Code
+- Turn 3+: Subsequent rounds
+- If turn 6 reached without consensus → end as **STALEMATE**
+
+Each turn = one start+poll+stop cycle.
+
+## Step 6: Present Result to User
+
+Present a **Thinking Session Summary**:
 
 ```
-## Debate Summary
+## Thinking Session Summary
 
+### Question: <original query>
 ### Rounds: X
-### Final Verdict: [CONSENSUS REACHED / STALEMATE - USER DECISION NEEDED]
+### Result: CONSENSUS / STALEMATE / TECHNICAL_FAILURE
 
-### Key Changes from Debate:
-1. [Change 1 - accepted from Codex]
-2. [Change 2 - accepted from Codex]
+### Key Insights (from the discussion):
+1. [Insight — who raised it, how the other side responded]
 ...
 
-### Points Where Claude Prevailed:
-1. [Point 1 - Claude's position was maintained]
+### Considerations
+- **[Aspect]**: [Analysis — consensus or disagreement]
 ...
 
-### Points Where Codex Prevailed:
-1. [Point 1 - Codex's position was accepted]
+### Recommendations:
+1. [Recommendation — consensus or majority position]
 ...
 
-### Final Plan:
-<Path to the updated plan file>
+### Open Questions (worth exploring further):
+- [Question]
+...
+
+### Confidence Level
+[HIGH | MEDIUM | LOW] — [Explanation based on consensus level achieved]
+
+### Consensus/Disagreement Status
+- **Agreed Points**: [list]
+- **Unresolved Disagreements** (if stalemate): [Claude Code's position vs Codex's position for each point]
 ```
 
-Then ask the user (via `AskUserQuestion`):
-- **Approve & Implement** - Proceed with the final plan
-- **Request more rounds** - Continue debating specific points
-- **Modify manually** - User wants to make their own adjustments before implementing
+Then ask via `AskUserQuestion`:
+- **Follow-up question** — ask more (starts a new thinking round with both AIs)
+- **Done** — end the session
 
-## Step 7: Implementation
-
-If the user approves:
-1. Exit plan mode if still in it.
-2. Begin implementing the final debated plan.
-3. The plan has been stress-tested — implement with confidence.
+If the user chooses follow-up → **always start a new thread** (new question needs Codex to think independently). Only resume the old thread if the user explicitly says "continue exactly where we left off". When starting a new thread, pass a structured facts summary from the previous session (not the full thread).
 
 ## Important Rules
 
-1. **Codex reads the plan file itself** - Do NOT paste plan content into the prompt. Just give Codex the file path.
-2. **Only send what Codex can't access** - The prompt should contain: file paths, user's original request, session context. NOT: file contents, diffs, code snippets.
-3. **Always use heredoc (`<<'EOF'`) for prompts** - Never use `echo "<prompt>" |`. Heredoc with single-quoted delimiter prevents shell expansion.
-4. **No `-m` flag** - Always use Codex's default model.
-5. **Resume by thread ID** - Use the `thread_id` from the `THREAD_ID:` line of poll completed output for subsequent rounds.
-6. **Never skip the user summary** - After each round, tell the user what happened before continuing.
-7. **Be genuinely adversarial** - Don't just accept everything Codex says. Push back when you have good reason to.
-8. **Don't rubber-stamp** - If you think Codex missed something, point it out in your rebuttal.
-9. **Track the plan evolution** - Update the plan file after each round so Codex always reads the latest version.
-10. **Require structured output** - If Codex's response doesn't follow the ISSUE-{N} format, ask it to reformat in the resume prompt.
-11. **Always call `stop` after getting results** - Clean up the state directory after extracting the completed result or handling errors.
+1. **Factual context only** — Do NOT send Claude Code's opinions or analysis in the Round 1 prompt. Keep Codex independent for initial thinking.
+2. **Peer debate, not hierarchical** — Claude Code does NOT direct Codex. Both are equals.
+3. **Codex reads files itself** — only list paths, do NOT paste file content.
+4. **Heredoc `<<'EOF'`** for all prompts.
+5. **No `-m` flag** — always use Codex's default model.
+6. **Resume by thread ID** for rounds 2+.
+7. **Summarize after every round** — user sees progress without intervening.
+8. **Auto-loop** — do NOT ask user between rounds. Loop automatically until consensus/stalemate.
+9. **Stalemate = 2 rounds without progress** — same disagreements, no new evidence or dimensions.
+10. **Always call `stop`** after extracting results from each round.
+11. **Best-effort parsing** — if Codex output doesn't match format exactly, parse what you can. Content matters more than format for a thinking skill.
+12. **Track disagreements** — maintain a disagreement registry (D-1, D-2, ...) with status across rounds to detect stalemate.
 
 ## Error Handling
 
-- If poll returns `POLL:timeout:`, inform the user and ask if they want to retry with a longer timeout. Call `stop` to cleanup.
-- If poll returns `POLL:failed:`, report the error message to the user. Call `stop` to cleanup.
-- If poll returns `POLL:stalled:`, ask the user whether to retry or abort. Call `stop` to cleanup.
-- If the `start` command exits with code `5` (codex not found), tell the user to install the Codex CLI.
-- If the debate stalls (same points going back and forth without resolution), present the disagreement to the user and let them decide.
+All error handling is **fully automatic** — do not ask the user during the loop.
+
+**Timeout policy**: base timeout = 1800s. Retry uses timeout x2 = 3600s.
+
+- `POLL:timeout:` → auto-retry once with `--timeout 3600`. If still timeout → end with `TECHNICAL_FAILURE`, present to user at Step 6. Call `stop`.
+- `POLL:failed:` → auto-retry once (same timeout). If still fails → end with `TECHNICAL_FAILURE`. Call `stop`.
+- `POLL:stalled:` → auto-retry once (same timeout). If still stalls → end with `TECHNICAL_FAILURE`. Call `stop`.
+- Exit code 5 → end immediately, tell user to install Codex CLI at Step 6.
+- Malformed output → parse best-effort, extract key content. Do not request reformatting (content matters more than format for thinking).
