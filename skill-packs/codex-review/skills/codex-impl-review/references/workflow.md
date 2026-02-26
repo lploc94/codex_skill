@@ -56,3 +56,9 @@ STATE_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" start \
 - Fixed defects by severity.
 - Disputed items and rationale.
 - Residual risk (if any).
+
+## 8) Cleanup
+```bash
+node "$RUNNER" stop "$STATE_DIR"
+```
+Remove the state directory and kill any remaining Codex/watchdog processes. Always run this step, even if the review ended due to failure or timeout.

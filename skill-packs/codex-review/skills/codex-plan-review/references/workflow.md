@@ -59,3 +59,9 @@ STATE_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" start \
 - Accepted issues and plan edits.
 - Disputed issues with reasoning.
 - Final plan path.
+
+## 8) Cleanup
+```bash
+node "$RUNNER" stop "$STATE_DIR"
+```
+Remove the state directory and kill any remaining Codex/watchdog processes. Always run this step, even if the debate ended due to failure or timeout.
