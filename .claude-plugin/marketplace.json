@@ -8,7 +8,7 @@
       "name": "codex-review",
       "source": "./plugins/codex-review",
       "description": "Adversarial plan review and code review with OpenAI Codex CLI",
-      "version": "1.1.0",
+      "version": "1.5.0",
       "category": "development",
       "tags": [
         "skill",

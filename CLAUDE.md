@@ -18,10 +18,17 @@ Claude Code plugin (`codex-review`) that uses OpenAI Codex CLI as an adversarial
 
 ## Development Commands
 
-**Check embedding consistency** (verifies codex-runner.sh version matches across all embedded locations):
+**Re-embed runner script** (re-embeds codex-runner.sh into all 4 locations and verifies hashes):
+```bash
+./plugins/codex-review/scripts/embed-runner.sh --update
+```
+
+**Check embedding consistency** (verifies content hash of each embedded copy matches source):
 ```bash
 ./plugins/codex-review/scripts/embed-runner.sh --check
 ```
+
+Also update `embed-runner.sh` line 38 (SKILL.md bootstrap) to reference the new version when bumping `CODEX_RUNNER_VERSION`.
 
 There is no build system, test suite, or linter. The project is pure Bash + Markdown + JSON.
 
@@ -66,7 +73,17 @@ plugins/codex-review/
 - `skills/codex-impl-review/SKILL.md`
 - `skills/codex-think-about/SKILL.md`
 
-When updating the runner script, run `embed-runner.sh --check` to detect version drift. Drift must be fixed manually — the checker only reports, it does not auto-update.
+When updating the runner script:
+1. Run `embed-runner.sh --update` to re-embed the script into all four locations automatically
+2. Run `embed-runner.sh --check` to verify all embeddings have matching content hashes
+
+### Release Versioning
+
+**When releasing a new plugin version, both version files must be updated together:**
+- `plugins/codex-review/.claude-plugin/plugin.json` — plugin version
+- `.claude-plugin/marketplace.json` — marketplace listing version
+
+These must always match. Bumping only one file will cause a user-visible version inconsistency.
 
 ### codex-runner.sh Exit Codes
 

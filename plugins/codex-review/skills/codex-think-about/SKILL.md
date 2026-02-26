@@ -1019,8 +1019,8 @@ print(json.dumps({'thread_id': os.environ.get('THREAD_ID_VAL', ''), 'review': te
   echo "CODEX_RESULT:${REVIEW_JSON}"
   exit $EXIT_SUCCESS
 fi
-
 ```
+<!-- codex-runner-hash: abf7df8f5fed33dab0bfb81934872f48917e7ea4733b19236a9893945848365d -->
 
 ### Runner Output Format
 
