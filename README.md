@@ -1,39 +1,50 @@
 # codex-skill
 
-`codex-skill` is an npm CLI that installs the `codex-review` skill pack for Claude Code.
+CLI that installs the **codex-review** skill pack for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
-The pack provides three skills:
-- `/codex-plan-review`
-- `/codex-impl-review`
-- `/codex-think-about`
+The pack provides three skills powered by [OpenAI Codex CLI](https://github.com/openai/codex):
+- `/codex-plan-review` — debate implementation plans before coding
+- `/codex-impl-review` — review uncommitted changes before commit
+- `/codex-think-about` — peer reasoning/debate on technical topics
 
 ## Requirements
 
 - Node.js >= 20
-- Claude Code CLI
-- OpenAI Codex CLI (`codex`) in PATH
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
+- [OpenAI Codex CLI](https://github.com/openai/codex) (`codex`) in PATH
 - OpenAI API key configured for Codex
 
 ## Install
 
+### From GitHub (recommended)
+
+```bash
+npm install -g github:lploc94/codex_skill
+```
+
+Or if you want to clone and develop:
+
+```bash
+git clone https://github.com/lploc94/codex_skill.git
+cd codex_skill
+npm link
+```
+
 ### Global scope
 
 ```bash
-npm install -g codex-skill
 codex-skill init -g
 ```
 
-Global install target:
-- `~/.claude/skills/codex-review`
+Installs skills to `~/.claude/skills/codex-review/`.
 
 ### Project scope
 
 ```bash
-npx codex-skill init
+codex-skill init
 ```
 
-Project install target:
-- `<project>/.claude/skills/codex-review`
+Installs skills to `<project>/.claude/skills/codex-review/`.
 
 ## Verify
 
