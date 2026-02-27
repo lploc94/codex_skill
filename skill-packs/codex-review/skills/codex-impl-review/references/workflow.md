@@ -1,9 +1,25 @@
 # Implementation Review Workflow
 
 ## 1) Collect Inputs
+
+### Mode Selection
+Ask user: `working-tree` (default) or `branch`.
+
+### Working-tree mode:
 - Working directory path.
 - User request and acceptance criteria.
-- Uncommitted changes.
+- Uncommitted changes (`git status`, `git diff`, `git diff --cached`).
+- Optional plan file for intent alignment.
+
+### Branch mode:
+- **Base branch discovery:**
+  1. Ask user for base branch, suggest default.
+  2. Validate ref: `git rev-parse --verify <base>` — fail-fast if not found.
+  3. Fallback order if user doesn't specify: `main` → `master` → remote HEAD (`git symbolic-ref refs/remotes/origin/HEAD`).
+  4. Confirm with user if using fallback.
+- **Clean working tree required**: run `git diff --quiet && git diff --cached --quiet`. If uncommitted changes exist, tell user to commit or stash first, or switch to working-tree mode.
+- Branch diff: `git diff <base>...HEAD`.
+- Commit log: `git log <base>..HEAD --oneline`.
 - Optional plan file for intent alignment.
 
 ## 2) Start Round 1
@@ -30,7 +46,18 @@ Adaptive intervals — start slow, speed up:
 - Poll 1: wait 30s
 - Poll 2+: wait 15s
 
-After each poll, report to user what Codex is doing (extract status lines from poll output).
+After each poll, parse the status lines and report **specific activities** to the user. NEVER say generic messages like "Codex đang hoạt động" or "tiếp tục chờ" — these provide no information.
+
+**How to parse poll output for user reporting:**
+Poll output contains lines like `[Ns] Codex thinking: ...`, `[Ns] Codex running: ...`, `[Ns] Codex completed: ...`. Extract and summarize:
+- `Codex thinking: "**Some topic**"` → Report: "Codex đang phân tích: {topic}"
+- `Codex running: /bin/zsh -lc 'git diff ...'` → Report: "Codex đang đọc diff của repo"
+- `Codex running: /bin/zsh -lc 'cat src/foo.ts'` → Report: "Codex đang đọc file `src/foo.ts`"
+- `Codex running: /bin/zsh -lc 'rg -n "pattern" ...'` → Report: "Codex đang tìm kiếm `pattern` trong code"
+- Multiple completed commands → Summarize: "Codex đã đọc {N} files, đang phân tích kết quả"
+
+**Report template:** "Codex [{elapsed}s]: {specific activity summary}" — always include elapsed time and concrete description of what Codex is doing or just did.
+
 Continue while status is `running`.
 Stop on `completed|failed|timeout|stalled`.
 
@@ -38,6 +65,7 @@ Stop on `completed|failed|timeout|stalled`.
 - Parse `ISSUE-{N}` blocks.
 - For valid issues: edit code and record fix evidence.
 - For invalid issues: write rebuttal with concrete proof (paths, tests, behavior).
+- **Branch mode only**: after applying fixes, commit them (`git add` + `git commit`) before resuming. Codex reads `git diff <base>...HEAD` which only includes committed changes — uncommitted fixes will be invisible to Codex and cause repeated issues.
 
 ## 5) Resume Thread
 ```bash
@@ -52,7 +80,17 @@ STATE_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" start \
 - Or user accepts a documented stalemate.
 
 ## 7) Final Output
-- Round count and verdict.
+
+### Review Summary
+| Metric | Value |
+|--------|-------|
+| Rounds | {N} |
+| Verdict | {APPROVE/REVISE/STALEMATE} |
+| Issues Found | {total} |
+| Issues Fixed | {fixed_count} |
+| Issues Disputed | {disputed_count} |
+
+Then present:
 - Fixed defects by severity.
 - Disputed items and rationale.
 - Residual risk (if any).
@@ -62,3 +100,30 @@ STATE_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" start \
 node "$RUNNER" stop "$STATE_DIR"
 ```
 Remove the state directory and kill any remaining Codex/watchdog processes. Always run this step, even if the review ended due to failure or timeout.
+
+## Error Handling
+
+Runner `poll` trả status qua output string `POLL:<status>:<elapsed>[:exit_code:details]`. Thông thường exit 0, nhưng có thể exit non-zero khi state dir invalid hoặc I/O error — cần xử lý cả hai trường hợp:
+
+**Parse POLL string (exit 0):**
+- `POLL:completed:...` → thành công, đọc review.txt
+- `POLL:failed:...:3:...` → turn failed. Retry 1 lần. Nếu vẫn fail, report error.
+- `POLL:timeout:...:2:...` → timeout. Report partial results nếu review.txt tồn tại. Suggest retry với lower effort.
+- `POLL:stalled:...:4:...` → stalled. Report partial results. Suggest lower effort.
+
+**Fallback khi poll exit non-zero hoặc output không parse được:**
+- Log error output, report lỗi hạ tầng cho user, suggest retry.
+
+Runner `start` có thể fail với exit code:
+- 1 → generic error (invalid args, I/O). Report error message.
+- 5 → Codex CLI not found. Tell user to install.
+
+Always run cleanup (step 8) regardless of error.
+
+## Stalemate Handling
+
+When stalemate detected (same unresolved points for two consecutive rounds):
+1. List specific deadlocked points.
+2. Show each side's final argument for each point.
+3. Recommend which side user should favor.
+4. Ask user: accept current state or force one more round.

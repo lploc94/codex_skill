@@ -1,16 +1,16 @@
 ---
-name: codex-impl-review
-description: Have Codex CLI review uncommitted code changes or branch diff against a base branch. Claude applies valid fixes, rebuts invalid points, and iterates until consensus or user-approved stalemate.
+name: codex-commit-review
+description: Have Codex CLI review commit messages for clarity, conventions, and accuracy against diffs. Claude proposes revised messages, iterates until consensus or stalemate.
 ---
 
-# Codex Implementation Review
+# Codex Commit Review
 
 ## Purpose
-Use this skill to run adversarial review on uncommitted changes before commit, or on branch changes before merge.
+Use this skill to review commit messages before or after committing. Codex checks message quality — not code quality.
 
 ## Prerequisites
-- **Working-tree mode** (default): working tree has staged or unstaged changes.
-- **Branch mode**: current branch differs from base branch (has commits not in base).
+- **Draft mode**: user provides draft commit message text. Staged changes available for alignment check.
+- **Last mode**: recent commits exist (`git log -n N`). Repository has commit history.
 - `codex` CLI is installed and authenticated.
 - `codex-review` skill pack is installed (`npx github:lploc94/codex_skill`).
 
@@ -21,14 +21,14 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Ask user** to choose review effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Ask review mode: `working-tree` (default) or `branch`. If branch mode, ask for base branch name and validate (see workflow.md for base branch discovery). Set `EFFORT` and `MODE`.
-2. Build prompt from `references/prompts.md` (Working Tree or Branch Review Prompt).
+1. **Ask user** to choose review effort level: `low`, `medium`, `high`, or `xhigh` (default: `medium`). Ask input source: `draft` (user provides message text) or `last` (review last N commits, default 1). Set `EFFORT` and `MODE`.
+2. Gather commit message(s) and diff context. Build prompt from `references/prompts.md`.
 3. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT"`.
 4. Poll with adaptive intervals (Round 1: 60s/60s/30s/15s..., Round 2+: 30s/15s...). After each poll, report **specific activities** from poll output (e.g. which files Codex is reading, what topic it is analyzing). See `references/workflow.md` for parsing guide. NEVER report generic "Codex is running" — always extract concrete details.
 5. Parse issue list with `references/output-format.md`.
-6. Fix valid issues in code; rebut invalid findings with evidence.
+6. Propose revised commit message for valid issues; rebut invalid findings with evidence.
 7. Resume debate via `--thread-id` until `APPROVE` or stalemate.
-8. Return final review summary and unresolved risks.
+8. Return final revised message and review summary.
 
 ### Effort Level Guide
 | Level    | Depth             | Best for                        |
@@ -44,7 +44,7 @@ RUNNER="{{RUNNER_PATH}}"
 - Output contract: `references/output-format.md`
 
 ## Rules
-- Codex reviews only; it does not edit files.
-- Preserve functional intent unless fix requires behavior change.
-- Every accepted issue must map to a concrete code diff.
+- **Safety**: NEVER run `git commit --amend`, `git rebase`, or any command that modifies commit history. Only **propose** revised messages — user applies manually.
+- Codex reviews message quality only; it does not review code.
+- Every accepted issue must map to a concrete message edit.
 - If stalemate persists, present both sides and defer to user.

@@ -23,10 +23,18 @@ RUNNER="{{RUNNER_PATH}}"
 1. **Ask user** to choose reasoning effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Gather factual context only (no premature opinion). Set `EFFORT` to their choice.
 2. Build round-1 prompt from `references/prompts.md`.
 3. Start Codex thread with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT"`.
-4. Poll with adaptive intervals (Round 1: 60s/60s/30s/15s..., Round 2+: 30s/15s...). Report Codex status to user after each poll.
+4. Poll with adaptive intervals (Round 1: 60s/60s/30s/15s..., Round 2+: 30s/15s...). After each poll, report **specific activities** from poll output (e.g. which files Codex is reading, what topic it is analyzing). See `references/workflow.md` for parsing guide. NEVER report generic "Codex is running" — always extract concrete details.
 5. Claude responds with agree/disagree points and new perspectives.
 6. Resume via `--thread-id` and loop until consensus or stalemate.
 7. Present user-facing synthesis with agreements, disagreements, and confidence.
+
+### Effort Level Guide
+| Level    | Depth             | Best for                        |
+|----------|-------------------|---------------------------------|
+| `low`    | Surface check     | Quick sanity check              |
+| `medium` | Standard review   | Most day-to-day work            |
+| `high`   | Deep analysis     | Important features              |
+| `xhigh`  | Exhaustive        | Critical/security-sensitive     |
 
 ## Required References
 - Execution loop: `references/workflow.md`

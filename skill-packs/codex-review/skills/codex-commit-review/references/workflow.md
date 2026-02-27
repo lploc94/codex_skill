@@ -1,10 +1,11 @@
-# Plan Review Workflow
+# Commit Review Workflow
 
-## 1) Gather Inputs
-- Plan file path.
-- User request text.
-- Session context and constraints.
-- Debate effort (`low|medium|high|xhigh`).
+## 1) Collect Inputs
+- **Input source** (`draft` or `last`).
+- **Draft mode**: user-provided commit message text. Run `git diff --cached` for staged changes context.
+- **Last mode**: `git log -n "$N" --format='%H%n%B---'` to get message(s). For diff context: clamp N to available history (`MAX=$(git rev-list --count HEAD)`; if N > MAX, set N=MAX; if MAX is 0, abort with "no commits to review"). Use `git diff HEAD~"$N"..HEAD` when N < MAX. When N >= MAX (reviewing entire history including root commit), use `EMPTY_TREE=$(git hash-object -t tree /dev/null) && git diff "$EMPTY_TREE"..HEAD` to get a complete diff from empty tree.
+- Review effort level (`low|medium|high|xhigh`).
+- Project conventions (Conventional Commits, character limits, etc.) if discoverable from repo.
 
 ## 2) Start Round 1
 ```bash
@@ -45,26 +46,25 @@ Poll output contains lines like `[Ns] Codex thinking: ...`, `[Ns] Codex running:
 Continue while status is `running`.
 Stop on `completed|failed|timeout|stalled`.
 
-## 4) Parse Review
-- Read `THREAD_ID:` and `review.txt` from runner output/state directory.
-- Extract `ISSUE-{N}` blocks.
-- Apply accepted fixes to plan.
-- Build rebuttal packet for disputed items.
+## 4) Apply/Rebut
+- Parse `ISSUE-{N}` blocks from Codex output.
+- For valid issues: propose revised commit message incorporating the fix.
+- For invalid issues: write rebuttal with concrete reasoning.
+- **NEVER** run `git commit --amend` or `git rebase` — only propose text.
 
-## 5) Resume (Round 2+)
+## 5) Resume Thread
 ```bash
 STATE_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" start \
   --working-dir "$PWD" --thread-id "$THREAD_ID" --effort "$EFFORT")
 ```
 
-**→ Go back to step 3 (Poll).** After poll completes, repeat step 4 (Parse) and check stop conditions below. If not met, resume again (step 5). Continue this loop until a stop condition is reached.
+**→ Go back to step 3 (Poll).** After poll completes, repeat step 4 (Apply/Rebut) and check completion criteria below. If not met, resume again (step 5). Continue this loop until a completion criterion is reached.
 
-## 6) Stop Conditions
-- `VERDICT: APPROVE`.
-- Stalemate (same unresolved points for two consecutive rounds).
-- User stops debate.
+## 6) Completion Criteria
+- Codex returns `VERDICT: APPROVE`.
+- Or user accepts a documented stalemate.
 
-## 7) Final Report
+## 7) Final Output
 
 ### Review Summary
 | Metric | Value |
@@ -76,15 +76,15 @@ STATE_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" start \
 | Issues Disputed | {disputed_count} |
 
 Then present:
-- Accepted issues and plan edits.
-- Disputed issues with reasoning.
-- Final plan path.
+- **Original message** (verbatim).
+- **Revised message** (if changes were made).
+- Issue details with reasoning.
 
 ## 8) Cleanup
 ```bash
 node "$RUNNER" stop "$STATE_DIR"
 ```
-Remove the state directory and kill any remaining Codex/watchdog processes. Always run this step, even if the debate ended due to failure or timeout.
+Remove the state directory and kill any remaining Codex/watchdog processes. Always run this step, even if the review ended due to failure or timeout.
 
 ## Error Handling
 
@@ -110,5 +110,5 @@ Always run cleanup (step 8) regardless of error.
 When stalemate detected (same unresolved points for two consecutive rounds):
 1. List specific deadlocked points.
 2. Show each side's final argument for each point.
-3. Recommend which side user should favor.
-4. Ask user: accept current state or force one more round.
+3. Recommend which version of the commit message user should favor.
+4. Ask user: accept current revision or force one more round.

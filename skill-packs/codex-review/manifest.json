@@ -1,10 +1,12 @@
 {
   "name": "codex-review",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "runner": "scripts/codex-runner.js",
   "skills": [
     "codex-plan-review",
     "codex-impl-review",
-    "codex-think-about"
+    "codex-think-about",
+    "codex-commit-review",
+    "codex-pr-review"
   ]
 }
