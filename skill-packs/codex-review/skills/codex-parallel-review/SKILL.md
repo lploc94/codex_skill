@@ -22,8 +22,11 @@ RUNNER="{{RUNNER_PATH}}"
 
 ## Workflow
 1. **Ask user** for effort level (`low`/`medium`/`high`/`xhigh`, default: `high`), review mode (`working-tree`/`branch`), and max debate rounds (default: 3).
-2. **Phase 1 — Parallel Review**: Start Codex via runner; while polling, Claude reviews the same changes independently using structured checklist. Both produce findings without seeing each other's output.
-3. **Phase 2 — Merge**: Compare findings. Categorize into agreed / claude-only / codex-only / contradictions.
+2. **Phase 1 — Parallel Review (all concurrent)**:
+   - Start Codex via runner (background subprocess).
+   - Spawn 3 `code-reviewer` agents in parallel via Agent tool, each covering different categories. See `references/workflow.md` for agent assignments.
+   - Poll Codex while agents run. All 4 reviewers work simultaneously.
+3. **Phase 2 — Merge**: Aggregate findings from 3 Claude agents + Codex. Categorize into agreed / claude-only / codex-only / contradictions.
 4. **Phase 3 — Debate**: Apply agreed fixes. For disagreements, Claude rebuts or concedes; resume Codex thread for response. Loop until resolved or round limit.
 5. **Phase 4 — Final Report**: Present consensus, resolved disagreements, unresolved items, and risk assessment.
 6. **Cleanup**: Always run `node "$RUNNER" stop "$STATE_DIR"`.

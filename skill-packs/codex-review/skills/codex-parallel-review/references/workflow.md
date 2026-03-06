@@ -33,21 +33,53 @@ STATE_OUTPUT=$(printf '%s' "$CODEX_PROMPT" | node "$RUNNER" start --working-dir 
 STATE_DIR=${STATE_OUTPUT#CODEX_STARTED:}
 ```
 
-## 3) Claude Parallel Review
+## 3) Claude Parallel Review (Agent Spawning)
 
-**While Codex is running** (during poll wait intervals), Claude performs its own independent review on the same diffs/files.
+**Immediately after starting Codex**, spawn 3 `code-reviewer` agents in parallel using the Agent tool. Each agent reviews the same files but focuses on different categories. All run concurrently with Codex.
 
-### Review Checklist
-Analyze every changed file against these categories:
+### Agent Assignments
 
-1. **Correctness**: logic errors, wrong return values, missing null checks, incorrect conditions, type mismatches.
-2. **Edge cases**: boundary conditions, empty inputs, overflow, concurrent access, off-by-one errors.
-3. **Security**: injection (SQL/XSS/command), auth bypass, data exposure, insecure defaults, missing input validation.
-4. **Performance**: O(n²) loops, unnecessary allocations, missing caching, N+1 queries, blocking I/O in async context.
-5. **Maintainability**: naming clarity, DRY violations, missing error handling, overly complex logic, dead code.
+**Agent 1 — Correctness & Edge Cases** (run_in_background: true)
+```
+Review files in {WORKING_DIR} for:
+1. Correctness: logic errors, wrong return values, missing null checks, incorrect conditions, type mismatches
+2. Edge cases: boundary conditions, empty inputs, overflow, concurrent access, off-by-one errors
 
-### FINDING Format
-For each issue found, produce:
+{DIFF_CONTEXT}
+
+For each issue, use this format:
+### FINDING-{N}: {title}
+- Category: bug | edge-case
+- Severity: low | medium | high | critical
+- File: {path}
+- Location: {line range or function name}
+- Problem: {description}
+- Suggested fix: {fix}
+```
+
+**Agent 2 — Security & Performance** (run_in_background: true)
+```
+Review files in {WORKING_DIR} for:
+1. Security: injection (SQL/XSS/command), auth bypass, data exposure, insecure defaults, missing input validation
+2. Performance: O(n²) loops, unnecessary allocations, missing caching, N+1 queries, blocking I/O in async context
+
+{DIFF_CONTEXT}
+
+Use same FINDING-{N} format. Categories: security | performance
+```
+
+**Agent 3 — Maintainability & DRY** (run_in_background: true)
+```
+Review files in {WORKING_DIR} for:
+1. Maintainability: naming clarity, DRY violations, missing error handling, overly complex logic, dead code
+2. Architecture: separation of concerns, module boundaries, API consistency
+
+{DIFF_CONTEXT}
+
+Use same FINDING-{N} format. Categories: maintainability
+```
+
+### FINDING Format (all agents use this)
 ```
 ### FINDING-{N}: {title}
 - Category: bug | edge-case | security | performance | maintainability
@@ -58,10 +90,12 @@ For each issue found, produce:
 - Suggested fix: {fix}
 ```
 
-Store findings internally — do NOT show to user yet.
-
-### Interleave with Polling
-Between poll calls, continue reviewing. Complete review before or by the time Codex finishes.
+### Execution
+1. Spawn all 3 agents with `run_in_background: true` in a single message (parallel launch).
+2. Include diff context (`git diff` or `git diff <base>...HEAD`) in each agent prompt.
+3. Include the list of changed files so agents know what to read.
+4. Agents run concurrently with Codex — no waiting between them.
+5. Collect results from all 3 agents after Codex polling completes (or sooner if agents finish first).
 
 ## 4) Poll Codex
 
@@ -93,11 +127,11 @@ Continue while `POLL:running`. Stop on `completed|failed|timeout|stalled`.
 
 ## 5) Merge Findings
 
-After both reviews complete:
+After all 4 reviewers complete (3 Claude agents + Codex):
 
 1. Parse Codex `review.txt` for `ISSUE-{N}` blocks. Extract: title, category, severity, file, problem, fix.
-2. Parse Claude's `FINDING-{N}` blocks. Same fields.
-3. Match using heuristic:
+2. Collect `FINDING-{N}` blocks from all 3 Claude agents. Deduplicate across agents (same file + same location → keep the more detailed one). Renumber sequentially.
+3. Match Claude findings vs Codex findings using heuristic:
    - **Same file + overlapping location + same category** → `agreed`
    - **Same file + same category + different location** → check if same root cause → `agreed` or `unique`
    - **No match in other set** → `claude-only` or `codex-only`
@@ -160,7 +194,8 @@ Commit fixes before each resume. Codex reads `git diff <base>...HEAD` — uncomm
 ## Parallel Review Summary
 | Metric | Value |
 |--------|-------|
-| Claude findings | {N} |
+| Claude agents | 3 (correctness, security, maintainability) |
+| Claude findings | {N} (deduplicated across agents) |
 | Codex findings | {N} |
 | Agreed | {N} |
 | Resolved via debate | {N} |
