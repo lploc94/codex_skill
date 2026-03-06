@@ -3,11 +3,15 @@
 ## 1) Collect Inputs
 
 ### Mode Selection
-Ask user: `working-tree` (default) or `branch`.
+Ask user: `full-codebase` (default), `working-tree`, or `branch`.
+
+### Full-codebase mode (default):
+- List all source files: `find . -type f \( -name "*.js" -o -name "*.ts" -o -name "*.py" -o -name "*.go" -o -name "*.rs" -o -name "*.java" -o -name "*.cs" \) | grep -v node_modules | grep -v .git | grep -v dist | grep -v build`
+- Or use project-specific patterns (read `package.json`, `pyproject.toml`, etc. for source dirs).
+- User request and acceptance criteria.
+- Optional plan/docs files for context.
 
 ### Working-tree mode:
-- Working directory path.
-- User request and acceptance criteria.
 - Uncommitted changes (`git status`, `git diff`, `git diff --cached`).
 - Optional plan file for intent alignment.
 
@@ -15,20 +19,19 @@ Ask user: `working-tree` (default) or `branch`.
 - **Base branch discovery:**
   1. Ask user for base branch, suggest default.
   2. Validate ref: `git rev-parse --verify <base>` — fail-fast if not found.
-  3. Fallback order: `main` → `master` → remote HEAD (`git symbolic-ref refs/remotes/origin/HEAD`).
+  3. Fallback order: `main` → `master` → remote HEAD.
   4. Confirm with user if using fallback.
-- **Clean working tree required**: `git diff --quiet && git diff --cached --quiet`. If dirty, tell user to commit/stash or switch to working-tree mode.
+- **Clean working tree required**: if dirty, tell user to commit/stash or switch to working-tree mode.
 - Branch diff: `git diff <base>...HEAD`.
-- Commit log: `git log <base>..HEAD --oneline`.
 
 ### Max Debate Rounds
 Ask user for max debate rounds (default: 3). Store as `MAX_ROUNDS`.
 
-### Prepare Diff Context
-Capture diff output to pass to all reviewers:
-- Working-tree: `DIFF=$(git diff && git diff --cached)`
-- Branch: `DIFF=$(git diff <base>...HEAD)`
-- File list: `FILES=$(git diff --name-only)` or `git diff --name-only <base>...HEAD`
+### Prepare Context
+Based on mode:
+- **Full-codebase**: `FILES=$(find . ...)` — list all source files. No DIFF needed — reviewers read files directly.
+- **Working-tree**: `DIFF=$(git diff && git diff --cached)`, `FILES=$(git diff --name-only)`
+- **Branch**: `DIFF=$(git diff <base>...HEAD)`, `FILES=$(git diff --name-only <base>...HEAD)`
 
 ## 2) Launch All 4 Reviewers Simultaneously
 
@@ -56,7 +59,7 @@ Use Claude Code's **native Agent tool** (built-in, no plugins needed) to spawn 3
   "subagent_type": "code-reviewer",
   "description": "Review correctness and edge cases",
   "run_in_background": true,
-  "prompt": "You are an independent code reviewer. Another AI (Codex) is reviewing the same code separately — you will NOT see their findings. Be thorough.\n\nWorking directory: {WORKING_DIR}\nChanged files: {FILE_LIST}\n\nFocus ONLY on:\n1. Correctness: logic errors, wrong return values, missing null checks, incorrect conditions, type mismatches, off-by-one\n2. Edge cases: boundary conditions, empty inputs, overflow, concurrent access, race conditions\n\nRead each changed file. For each issue found, output:\n\n### FINDING-{N}: {title}\n- Category: bug | edge-case\n- Severity: low | medium | high | critical\n- File: {path}\n- Location: {line range or function name}\n- Problem: {description}\n- Suggested fix: {concrete fix}\n\nDiff context:\n```\n{DIFF}\n```\n\nIf no issues found in your categories, state that explicitly."
+  "prompt": "You are an independent code reviewer. Another AI (Codex) is reviewing the same code separately — you will NOT see their findings. Be thorough.\n\nWorking directory: {WORKING_DIR}\nMode: {MODE}\nFiles to review: {FILE_LIST}\n\nFocus ONLY on:\n1. Correctness: logic errors, wrong return values, missing null checks, incorrect conditions, type mismatches, off-by-one\n2. Edge cases: boundary conditions, empty inputs, overflow, concurrent access, race conditions\n\nRead each file listed above. For each issue found, output:\n\n### FINDING-{N}: {title}\n- Category: bug | edge-case\n- Severity: low | medium | high | critical\n- File: {path}\n- Location: {line range or function name}\n- Problem: {description}\n- Suggested fix: {concrete fix}\n\n{DIFF_OR_EMPTY}\n\nIf no issues found in your categories, state that explicitly."
 }
 ```
 
@@ -67,7 +70,7 @@ Use Claude Code's **native Agent tool** (built-in, no plugins needed) to spawn 3
   "subagent_type": "code-reviewer",
   "description": "Review security and performance",
   "run_in_background": true,
-  "prompt": "You are an independent code reviewer. Another AI (Codex) is reviewing the same code separately — you will NOT see their findings. Be thorough.\n\nWorking directory: {WORKING_DIR}\nChanged files: {FILE_LIST}\n\nFocus ONLY on:\n1. Security: injection (SQL/XSS/command), auth bypass, data exposure, insecure defaults, missing input validation, hardcoded secrets\n2. Performance: O(n²) loops, unnecessary allocations, missing caching, N+1 queries, blocking I/O in async context, memory leaks\n\nRead each changed file. Use FINDING-{N} format (same as other reviewers). Categories: security | performance\n\nDiff context:\n```\n{DIFF}\n```\n\nIf no issues found in your categories, state that explicitly."
+  "prompt": "You are an independent code reviewer. Another AI (Codex) is reviewing the same code separately — you will NOT see their findings. Be thorough.\n\nWorking directory: {WORKING_DIR}\nFiles to review: {FILE_LIST}\n\nFocus ONLY on:\n1. Security: injection (SQL/XSS/command), auth bypass, data exposure, insecure defaults, missing input validation, hardcoded secrets\n2. Performance: O(n²) loops, unnecessary allocations, missing caching, N+1 queries, blocking I/O in async context, memory leaks\n\nRead each changed file. Use FINDING-{N} format (same as other reviewers). Categories: security | performance\n\nDiff context:\n```\n{DIFF}\n```\n\nIf no issues found in your categories, state that explicitly."
 }
 ```
 
@@ -78,7 +81,7 @@ Use Claude Code's **native Agent tool** (built-in, no plugins needed) to spawn 3
   "subagent_type": "code-reviewer",
   "description": "Review maintainability and architecture",
   "run_in_background": true,
-  "prompt": "You are an independent code reviewer. Another AI (Codex) is reviewing the same code separately — you will NOT see their findings. Be thorough.\n\nWorking directory: {WORKING_DIR}\nChanged files: {FILE_LIST}\n\nFocus ONLY on:\n1. Maintainability: naming clarity, DRY violations, missing error handling, overly complex logic, dead code, missing comments for complex logic\n2. Architecture: separation of concerns, module boundaries, API consistency, coupling issues\n\nRead each changed file. Use FINDING-{N} format (same as other reviewers). Categories: maintainability\n\nDiff context:\n```\n{DIFF}\n```\n\nIf no issues found in your categories, state that explicitly."
+  "prompt": "You are an independent code reviewer. Another AI (Codex) is reviewing the same code separately — you will NOT see their findings. Be thorough.\n\nWorking directory: {WORKING_DIR}\nFiles to review: {FILE_LIST}\n\nFocus ONLY on:\n1. Maintainability: naming clarity, DRY violations, missing error handling, overly complex logic, dead code, missing comments for complex logic\n2. Architecture: separation of concerns, module boundaries, API consistency, coupling issues\n\nRead each changed file. Use FINDING-{N} format (same as other reviewers). Categories: maintainability\n\nDiff context:\n```\n{DIFF}\n```\n\nIf no issues found in your categories, state that explicitly."
 }
 ```
 

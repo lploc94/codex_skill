@@ -22,7 +22,7 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Collect inputs**: effort level, review mode, max debate rounds (default: 3). Capture diff + file list.
+1. **Collect inputs**: effort level, review mode (`full-codebase` default / `working-tree` / `branch`), max debate rounds (default: 3). Capture file list (+ diff if applicable).
 2. **Launch all 4 reviewers in ONE message** (true parallelism):
    - Start Codex via runner (background subprocess).
    - Spawn 3 `code-reviewer` agents via Agent tool with `run_in_background: true`:
