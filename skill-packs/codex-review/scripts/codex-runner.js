@@ -355,6 +355,75 @@ function parseJsonl(stateDir, lastLineCount, elapsed, processAlive, timeoutVal) 
 }
 
 // ============================================================
+// Adaptive timeout calculation
+// ============================================================
+
+function calculateAdaptiveTimeout(workingDir) {
+  try {
+    // Count source files (exclude common non-source directories)
+    const excludeDirs = [
+      "node_modules", ".git", "dist", "build", "coverage",
+      ".next", ".nuxt", "vendor", "target", "__pycache__",
+      ".venv", "venv", ".cache", "tmp", "temp"
+    ];
+    
+    let fileCount = 0;
+    
+    function countFiles(dir, depth = 0) {
+      if (depth > 10) return; // Prevent deep recursion
+      
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        
+        for (const entry of entries) {
+          const name = entry.name;
+          
+          // Skip hidden files and excluded directories
+          if (name.startsWith(".") || excludeDirs.includes(name)) {
+            continue;
+          }
+          
+          const fullPath = path.join(dir, name);
+          
+          if (entry.isDirectory()) {
+            countFiles(fullPath, depth + 1);
+          } else if (entry.isFile()) {
+            // Count only source files
+            const ext = path.extname(name).toLowerCase();
+            const sourceExts = [
+              ".js", ".ts", ".jsx", ".tsx", ".py", ".rb", ".go",
+              ".java", ".c", ".cpp", ".h", ".hpp", ".cs", ".php",
+              ".swift", ".kt", ".rs", ".scala", ".m", ".mm"
+            ];
+            if (sourceExts.includes(ext)) {
+              fileCount++;
+            }
+          }
+        }
+      } catch {
+        // Skip directories we can't read
+      }
+    }
+    
+    countFiles(workingDir);
+    
+    // Tiered timeout based on file count
+    if (fileCount < 50) {
+      return 300; // 5 minutes for small repos
+    } else if (fileCount < 200) {
+      return 900; // 15 minutes for medium repos
+    } else if (fileCount < 500) {
+      return 1800; // 30 minutes for large repos
+    } else {
+      return 3600; // 60 minutes for very large repos
+    }
+  } catch {
+    // Fallback to default if calculation fails
+    return 3600;
+  }
+}
+
+// ============================================================
 // Validation helpers
 // ============================================================
 
@@ -448,12 +517,25 @@ function cmdStart(argv) {
   const workingDir = values["working-dir"];
   const effort = values.effort || "high";
   const threadId = values["thread-id"] || "";
-  const timeout = parseInt(values.timeout || "3600", 10);
-
+  
   if (!workingDir) {
     process.stderr.write("Error: --working-dir is required\n");
     return EXIT_ERROR;
   }
+
+  // Resolve working directory first for adaptive timeout calculation
+  let resolvedWorkingDir;
+  try {
+    resolvedWorkingDir = fs.realpathSync(workingDir);
+  } catch {
+    process.stderr.write(`Error: working directory does not exist: ${workingDir}\n`);
+    return EXIT_ERROR;
+  }
+
+  // Use adaptive timeout if not explicitly provided
+  const timeout = values.timeout 
+    ? parseInt(values.timeout, 10)
+    : calculateAdaptiveTimeout(resolvedWorkingDir);
 
   // Check codex in PATH
   const whichCmd = IS_WIN ? "where" : "which";
@@ -461,14 +543,6 @@ function cmdStart(argv) {
   if (probe.status !== 0) {
     process.stderr.write("Error: codex CLI not found in PATH\n");
     return EXIT_CODEX_NOT_FOUND;
-  }
-
-  let resolvedWorkingDir;
-  try {
-    resolvedWorkingDir = fs.realpathSync(workingDir);
-  } catch {
-    process.stderr.write(`Error: working directory does not exist: ${workingDir}\n`);
-    return EXIT_ERROR;
   }
 
   // Read prompt from stdin

@@ -1,5 +1,20 @@
 # Implementation Review Workflow
 
+## 0) Choose Effort Level
+
+Select debate effort based on change complexity and time constraints:
+
+| Effort | Time Estimate | Analysis Depth | Best For |
+|--------|--------------|----------------|----------|
+| `low` | 2-5 min | Quick sanity check | Small diffs, typo fixes, obvious issues only |
+| `medium` | 5-10 min | Balanced review | Most changes, good depth without excessive time |
+| `high` | 10-20 min | Thorough analysis | Complex changes, security-sensitive code, refactors |
+| `xhigh` | 20-40 min | Exhaustive review | Critical bug fixes, API changes, high-risk refactors |
+
+**Recommendation**: Start with `medium` for most cases. Use `low` for trivial changes. Reserve `xhigh` for security-critical or high-impact changes only.
+
+**Note**: Adaptive timeout is automatically calculated based on repository size. Times above are per review round.
+
 ## 1) Collect Inputs
 
 ### Mode Selection
@@ -55,6 +70,12 @@ Poll output contains lines like `[Ns] Codex thinking: ...`, `[Ns] Codex running:
 - `Codex running: /bin/zsh -lc 'cat src/foo.ts'` → Report: "Codex đang đọc file `src/foo.ts`"
 - `Codex running: /bin/zsh -lc 'rg -n "pattern" ...'` → Report: "Codex đang tìm kiếm `pattern` trong code"
 - Multiple completed commands → Summarize: "Codex đã đọc {N} files, đang phân tích kết quả"
+
+**Progress tracking enhancement:**
+- Count `Codex completed: cat ...` lines to track files read
+- Group by file type: "Đã đọc 8 changed files, 3 context files"
+- Show cumulative progress: "Đã review 15/23 files trong diff"
+- Estimate remaining time based on elapsed time and progress
 
 **Report template:** "Codex [{elapsed}s]: {specific activity summary}" — always include elapsed time and concrete description of what Codex is doing or just did.
 
