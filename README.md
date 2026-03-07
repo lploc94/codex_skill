@@ -52,22 +52,13 @@ After install, start Claude Code and run:
 
 ## Performance Optimizations
 
-Recent improvements make reviews **50-92% faster** for most repositories:
-
-### Adaptive Timeout
-Automatically scales timeout based on repository size:
-- **Small repos** (< 50 files): 5 minutes (91.7% faster)
-- **Medium repos** (50-200 files): 15 minutes (75% faster)
-- **Large repos** (200-500 files): 30 minutes (50% faster)
-- **Very large repos** (> 500 files): 60 minutes (unchanged)
-
-No configuration needed - the runner automatically counts source files and adjusts timeout accordingly.
+Recent improvements help reviews focus on relevant code:
 
 ### Smart File Filtering
 Review prompts now guide Codex to focus on relevant files:
 - **Plan reviews**: Skip test files by default, focus on implementation files mentioned in the plan
 - **Implementation reviews**: Light review of test changes, concentrate on business logic
-- Reduces file reads by 40-60%
+- Reduces unnecessary file reads by 40-60%
 
 ### Effort Level Presets
 Choose review depth based on your needs:

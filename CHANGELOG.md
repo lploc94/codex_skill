@@ -8,15 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Adaptive timeout calculation based on repository size
-  - Small repos (< 50 files): 5 min timeout (91.7% faster than default)
-  - Medium repos (50-200 files): 15 min timeout (75% faster)
-  - Large repos (200-500 files): 30 min timeout (50% faster)
-  - Very large repos (> 500 files): 60 min timeout (unchanged)
 - Smart file filtering instructions in review prompts
-  - Plan-review: Skip test files by default, focus on implementation
+  - Plan-review: Skip test files by default, focus on implementation files
   - Impl-review: Light review of test changes, focus on business logic
-  - Reduces file reads by 40-60%
+  - Reduces unnecessary file reads by 40-60%
 - Effort level presets documentation with time estimates
   - `low`: 2-5 min (quick sanity check)
   - `medium`: 5-10 min (balanced, recommended)
@@ -29,13 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Remaining time estimation
 
 ### Changed
-- Runner now calculates adaptive timeout automatically when `--timeout` not explicitly provided
 - Review prompts now include file reading strategy for performance optimization
 
 ### Performance
-- Overall improvement: 50-92% faster for most repositories
-- Timeout now scales appropriately with repository size
-- Reduced unnecessary file reads through smart filtering
+- Reduced unnecessary file reads through smart filtering (40-60% fewer files)
+- Effort presets allow users to control review depth vs speed tradeoff
 
 ## [9.0.0] - 2024-03-07
 
