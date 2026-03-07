@@ -20,10 +20,10 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Collect inputs**: effort level, parallel factor, focus areas.
+1. **Collect inputs**: effort level, parallel factor, focus areas, output format (`markdown` default, `json`, `sarif`, or `both`).
 2. **Discovery**: detect project type, list source files, identify module boundaries.
 3. **Chunking**: group files into 500-2000 line chunks, present chunk plan.
-4. **Review loop**: for each chunk — build prompt, `node "$RUNNER" start`, poll, parse ISSUE-{N}, propagate context.
+4. **Review loop**: for each chunk — build prompt, `node "$RUNNER" start --format "$FORMAT"`, poll, parse ISSUE-{N}, propagate context.
 5. **Cross-cutting analysis**: Claude synthesizes all chunk findings — inconsistencies, API contracts, DRY violations, integration, architecture.
 6. **Validation** (effort >= high): feed CROSS-{N} findings to Codex for verification.
 7. **Final report**: overview table, per-module findings, cross-cutting findings, action items.
@@ -36,6 +36,16 @@ RUNNER="{{RUNNER_PATH}}"
 | `medium` | Auto + confirm   | Standard (3 cats)| Skip         |
 | `high`   | Full + confirm   | Full (5 cats)    | 1 round      |
 | `xhigh`  | Full + suggest   | Full + arch      | 2 rounds     |
+
+### Output Format Guide
+| Format     | Output Files                          | Best for                        |
+|------------|---------------------------------------|---------------------------------|
+| `markdown` | `review.txt` (human-readable)         | Default, interactive review     |
+| `json`     | `review.txt` + `review.json`          | CI/CD integration, automation   |
+| `sarif`    | `review.txt` + `review.sarif.json`    | IDE integration (VS Code, etc.) |
+| `both`     | All above + `review.md` (rendered)    | Complete documentation          |
+
+**Note**: `review.txt` is always written for backward compatibility. Each chunk produces separate output files in its STATE_DIR.
 
 ## Required References
 - Detailed orchestration: `references/workflow.md`

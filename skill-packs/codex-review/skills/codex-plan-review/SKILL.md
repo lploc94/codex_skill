@@ -20,9 +20,9 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Ask user** to choose debate effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Set `EFFORT` to their choice.
+1. **Ask user** to choose debate effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Ask output format: `markdown` (default), `json`, `sarif`, or `both`. Set `EFFORT` and `FORMAT`.
 2. Build prompt from `references/prompts.md` (`Plan Review Prompt`).
-3. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT"`.
+3. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT" --format "$FORMAT"`.
 4. Poll with adaptive intervals (Round 1: 60s/60s/30s/15s..., Round 2+: 30s/15s...). After each poll, report **specific activities** from poll output (e.g. which files Codex is reading, what topic it is analyzing). See `references/workflow.md` for parsing guide. NEVER report generic "Codex is running" — always extract concrete details.
 5. Parse Codex issues (`ISSUE-{N}` + `VERDICT`) using `references/output-format.md`.
 6. Apply valid fixes to the plan, rebut invalid points, and resume with `--thread-id`.
@@ -36,6 +36,16 @@ RUNNER="{{RUNNER_PATH}}"
 | `medium` | Standard review   | Most day-to-day work            |
 | `high`   | Deep analysis     | Important features              |
 | `xhigh`  | Exhaustive        | Critical/security-sensitive     |
+
+### Output Format Guide
+| Format     | Output Files                          | Best for                        |
+|------------|---------------------------------------|---------------------------------|
+| `markdown` | `review.txt` (human-readable)         | Default, interactive review     |
+| `json`     | `review.txt` + `review.json`          | CI/CD integration, automation   |
+| `sarif`    | `review.txt` + `review.sarif.json`    | IDE integration (VS Code, etc.) |
+| `both`     | All above + `review.md` (rendered)    | Complete documentation          |
+
+**Note**: `review.txt` is always written for backward compatibility.
 
 ## Required References
 - Detailed execution steps: `references/workflow.md`

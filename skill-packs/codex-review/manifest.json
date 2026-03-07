@@ -1,6 +1,6 @@
 {
   "name": "codex-review",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "runner": "scripts/codex-runner.js",
   "skills": [
     "codex-plan-review",
@@ -9,6 +9,7 @@
     "codex-commit-review",
     "codex-pr-review",
     "codex-parallel-review",
-    "codex-codebase-review"
+    "codex-codebase-review",
+    "codex-security-review"
   ]
 }

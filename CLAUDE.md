@@ -13,6 +13,24 @@ This repository provides a single-command installer (`npx github:lploc94/codex_s
 - `/codex-parallel-review` — parallel independent review by both Claude and Codex, then debate
 - `/codex-codebase-review` — chunked full-codebase review for large projects (50-500+ files)
 
+## Codebase Understanding Guidelines
+
+**CRITICAL FOR OPENCODE/SISYPHUS**: When working on ANY project (including this one), ALWAYS use **Auggie codebase retrieval** (`auggie_codebase-retrieval` tool) as your PRIMARY tool for:
+- Understanding codebase structure and architecture
+- Finding implementations, classes, functions, or patterns
+- Locating relevant files when you don't know exact paths
+- Gathering high-level information about features or modules
+- Any semantic code search or exploration task
+
+**Auggie FIRST, then other tools:**
+- ✅ Use Auggie BEFORE grep, file reads, or bash commands for code understanding
+- ✅ Auggie uses advanced semantic search specifically designed for code
+- ✅ Auggie maintains real-time index and understands code context
+- ❌ DO NOT use bash/grep for semantic code understanding
+- ❌ Only use grep/bash for exact string matching of non-code content (error messages, config values, logs)
+
+**When in doubt between Auggie and other search tools → ALWAYS choose Auggie.**
+
 ## Distribution Model
 
 - Single command install: `npx github:lploc94/codex_skill`

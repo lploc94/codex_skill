@@ -20,9 +20,9 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Ask user** to choose reasoning effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Gather factual context only (no premature opinion). Set `EFFORT` to their choice.
+1. **Ask user** to choose reasoning effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Gather factual context only (no premature opinion). Ask output format: `markdown` (default), `json`, `sarif`, or `both`. Set `EFFORT` and `FORMAT`.
 2. Build round-1 prompt from `references/prompts.md`.
-3. Start Codex thread with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT"`.
+3. Start Codex thread with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT" --format "$FORMAT"`.
 4. Poll with adaptive intervals (Round 1: 60s/60s/30s/15s..., Round 2+: 30s/15s...). After each poll, report **specific activities** from poll output (e.g. which files Codex is reading, what topic it is analyzing). See `references/workflow.md` for parsing guide. NEVER report generic "Codex is running" — always extract concrete details.
 5. Claude responds with agree/disagree points and new perspectives.
 6. Resume via `--thread-id` and loop until consensus or stalemate.
@@ -35,6 +35,16 @@ RUNNER="{{RUNNER_PATH}}"
 | `medium` | Standard review   | Most day-to-day work            |
 | `high`   | Deep analysis     | Important features              |
 | `xhigh`  | Exhaustive        | Critical/security-sensitive     |
+
+### Output Format Guide
+| Format     | Output Files                          | Best for                        |
+|------------|---------------------------------------|---------------------------------|
+| `markdown` | `review.txt` (human-readable)         | Default, interactive debate     |
+| `json`     | `review.txt` + `review.json`          | Structured reasoning output     |
+| `sarif`    | `review.txt` + `review.sarif.json`    | Not recommended for think-about |
+| `both`     | All above + `review.md` (rendered)    | Complete documentation          |
+
+**Note**: `review.txt` is always written for backward compatibility. SARIF format is less useful for think-about (no code locations), prefer JSON for structured output.
 
 ## Required References
 - Execution loop: `references/workflow.md`
