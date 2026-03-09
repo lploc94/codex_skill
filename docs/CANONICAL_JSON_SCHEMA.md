@@ -197,6 +197,49 @@ For `codex-codebase-review` cross-cutting findings only
 
 ---
 
+## Finding Object (RESPONSE-{N})
+
+For `codex-parallel-review` debate phase only
+
+```json
+{
+  "id": "RESPONSE-1",
+  "type": "response",
+  "title": "Re: SQL injection vulnerability in user search",
+  "target": "SQL injection vulnerability in user search",
+  "action": "accept | reject | revise",
+  "reason": "Valid security concern. The parameterized query fix is correct and necessary.",
+  "confidence": "high",
+  
+  "revised_finding": {
+    "description": "Optional: if action=revise, provide modified position",
+    "suggested_fix": {
+      "description": "Alternative approach...",
+      "code": "// revised code..."
+    }
+  },
+  
+  "counter_evidence": "Optional: if action=reject, provide evidence against the original finding",
+  
+  "status": "open | resolved"
+}
+```
+
+**Field Descriptions:**
+- `target`: Extracted from title format "Re: {original finding title}"
+- `action`: Codex's decision on the disputed finding
+  - `accept`: Agrees with Claude's finding/rebuttal
+  - `reject`: Disagrees, provides counter-evidence
+  - `revise`: Offers modified position
+- `reason`: Evidence-based reasoning for the action
+- `revised_finding`: Only present if action=revise
+- `counter_evidence`: Only present if action=reject
+
+**Usage:**
+RESPONSE findings appear during parallel-review debate rounds when Codex responds to disputed findings. They are parsed but excluded from SARIF output (debate metadata, not actionable issues).
+
+---
+
 ## Verdict Object
 
 ```json
@@ -583,19 +626,29 @@ function validateFinding(finding) {
   }
   
   // Validate type
-  if (!['issue', 'perspective', 'cross-cutting'].includes(finding.type)) {
+  if (!['issue', 'perspective', 'cross-cutting', 'response'].includes(finding.type)) {
     throw new Error(`Invalid type: ${finding.type}`);
   }
   
   // Type-specific validation
   if (finding.type === 'issue' || finding.type === 'cross-cutting') {
-    // ISSUE-{N} and CROSS-{N} require category and severity
-    if (!finding.category) throw new Error('Missing required field: category');
-    if (!finding.severity) throw new Error('Missing required field: severity');
-    
-    if (!['critical', 'error', 'warning', 'note', 'info'].includes(finding.severity)) {
-      throw new Error(`Invalid severity: ${finding.severity}`);
-    }
+// ISSUE-{N} and CROSS-{N} require category and severity
+if (finding.type === 'issue' || finding.type === 'cross-cutting') {
+  assert(finding.category, 'category required for ISSUE/CROSS');
+  assert(finding.severity, 'severity required for ISSUE/CROSS');
+}
+
+// PERSPECTIVE-{N} requires perspective_type instead of category
+if (finding.type === 'perspective') {
+  assert(finding.perspective_type, 'perspective_type required for PERSPECTIVE');
+}
+
+// RESPONSE-{N} requires action and reason
+if (finding.type === 'response') {
+  assert(finding.action, 'action required for RESPONSE');
+  assert(['accept', 'reject', 'revise'].includes(finding.action), 'action must be accept/reject/revise');
+  assert(finding.reason, 'reason required for RESPONSE');
+}
   }
   
   if (finding.type === 'perspective') {

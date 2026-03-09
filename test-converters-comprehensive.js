@@ -206,6 +206,35 @@ Codebase structure is solid overall.`,
 ### VERDICT: REVISE
 
 Fix critical and high severity issues before merge.`,
+
+  // Format 7: RESPONSE blocks (parallel-review debate phase)
+  responseBlocks: `### RESPONSE-1: Re: SQL injection vulnerability in user search
+
+- Action: accept
+- Reason: Valid security concern. The parameterized query fix is correct and necessary.
+
+### RESPONSE-2: Re: Missing error handling in async function
+
+- Action: revise
+- Reason: While error handling is needed, the suggested try-catch approach may mask errors. Recommend using proper error middleware instead.
+
+### VERDICT: APPROVE
+
+All critical issues resolved. RESPONSE-2 provides better alternative approach.`,
+
+  // Format 8: Mixed RESPONSE with malformed block
+  malformedResponse: `### RESPONSE-1: Re: Authentication bypass
+
+- Action: accept
+- Reason: Fix is correct.
+
+### RESPONSE-2: Re: Performance issue
+
+- Reason: This needs more investigation.
+
+### VERDICT: REVISE
+
+RESPONSE-2 missing action field.`,
 };
 
 // Test metadata
@@ -304,6 +333,31 @@ const testCases = [
       'SARIF should map medium → warning',
       'SARIF should map low → note',
       'SARIF should map info → none',
+    ]
+  },
+  {
+    name: 'Parse RESPONSE blocks (parallel-review debate)',
+    fixture: fixtures.responseBlocks,
+    expectedFindings: 2,
+    expectedVerdict: 'APPROVE',
+    checks: [
+      'Should parse RESPONSE-N type',
+      'Should extract action field (accept/revise)',
+      'Should extract reason field',
+      'Should extract target from "Re: {title}" format',
+      'RESPONSE should not appear in SARIF output',
+      'RESPONSE should appear in "Other Findings" section of markdown',
+    ]
+  },
+  {
+    name: 'Handle malformed RESPONSE blocks',
+    fixture: fixtures.malformedResponse,
+    expectedFindings: 2,
+    expectedVerdict: 'REVISE',
+    checks: [
+      'Should parse RESPONSE-1 with all fields',
+      'Should parse RESPONSE-2 even with missing action field',
+      'Should not crash on incomplete RESPONSE blocks',
     ]
   },
 ];

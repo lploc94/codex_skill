@@ -254,7 +254,8 @@ function parseToCanonicalJSON(markdownOutput, metadata) {
   // - ## ISSUE-1: ...
   // - ### ISSUE-1: ...
   // - ISSUE-1: ...
-  const findingRegex = /^\s*(?:#{2,3}\s*)?(ISSUE-\d+|PERSPECTIVE-\d+|CROSS-\d+)\s*:\s*(.+?)\s*$/gim;
+  // - RESPONSE-1: ...
+  const findingRegex = /^\s*(?:#{2,3}\s*)?(ISSUE-\d+|PERSPECTIVE-\d+|CROSS-\d+|RESPONSE-\d+)\s*:\s*(.+?)\s*$/gim;
   const matches = [...text.matchAll(findingRegex)];
 
   const verdictHeaderRegex = /^\s*(?:#{2,3}\s*)?VERDICT(?:\s*:\s*([A-Za-z|/\-\s]+))?\s*$/im;
@@ -280,6 +281,7 @@ function parseToCanonicalJSON(markdownOutput, metadata) {
     let type = "issue";
     if (id.startsWith("PERSPECTIVE-")) type = "perspective";
     if (id.startsWith("CROSS-")) type = "cross-cutting";
+    if (id.startsWith("RESPONSE-")) type = "response";
 
     const finding = { id, type, title };
 
@@ -324,7 +326,7 @@ function parseToCanonicalJSON(markdownOutput, metadata) {
       ];
       const stopPattern = knownLabels.map((label) => escapeRegExp(label)).join("|");
       const fixRegex = new RegExp(
-        `(?:^|\\n)\\s*(?:[-*]\\s*)?(?:\\*\\*)?Suggested\\s*Fix(?:\\*\\*)?\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:[-*]\\s*)?(?:\\*\\*)?(?:${stopPattern})(?:\\*\\*)?\\s*:|\\n\\s*(?:#{2,3}\\s*)?(?:ISSUE-\\d+|PERSPECTIVE-\\d+|CROSS-\\d+|VERDICT\\b)|$)`,
+        `(?:^|\\n)\\s*(?:[-*]\\s*)?(?:\\*\\*)?Suggested\\s*Fix(?:\\*\\*)?\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:[-*]\\s*)?(?:\\*\\*)?(?:${stopPattern})(?:\\*\\*)?\\s*:|\\n\\s*(?:#{2,3}\\s*)?(?:ISSUE-\\d+|PERSPECTIVE-\\d+|CROSS-\\d+|RESPONSE-\\d+|VERDICT\\b)|$)`,
         "im"
       );
       const fallbackFixMatch = block.match(fixRegex);
@@ -346,7 +348,8 @@ function parseToCanonicalJSON(markdownOutput, metadata) {
     const refs = extractExternalRefs(block, sections);
     if (refs.length > 0) finding.external_refs = refs;
 
-    if (!finding.status) finding.status = "open";
+    // Default status and confidence (but not for response type)
+    if (!finding.status && type !== "response") finding.status = "open";
     if (!finding.confidence) finding.confidence = "medium";
 
     if (type !== "issue") {
@@ -354,6 +357,46 @@ function parseToCanonicalJSON(markdownOutput, metadata) {
       const pattern = getSectionValue(sections, ["pattern"]);
       if (content && !finding.content) finding.content = content.trim();
       if (pattern) finding.pattern = pattern.trim();
+    }
+
+    // RESPONSE-specific fields (for parallel-review debate phase)
+    if (type === "response") {
+      const action = getSectionValue(sections, ["action"]);
+      const reason = getSectionValue(sections, ["reason"]);
+      if (action) {
+        const normalizedAction = action.trim().toLowerCase();
+        // Validate action against allowed values
+        if (["accept", "reject", "revise"].includes(normalizedAction)) {
+          finding.action = normalizedAction;
+        } else {
+          // Keep raw_action but don't set action to invalid value
+          finding.raw_action = action.trim();
+          finding.action_valid = false;
+        }
+      }
+      if (reason) finding.reason = reason.trim();
+      
+      // Extract target from title (format: "Re: {original finding title}")
+      const targetMatch = title.match(/^Re:\s*(.+)$/i);
+      if (targetMatch) finding.target = targetMatch[1].trim();
+      
+      // Parse optional revised_finding (for action=revise)
+      const revisedDesc = getSectionValue(sections, ["revised finding", "revised_finding"]);
+      if (revisedDesc) {
+        finding.revised_finding = { description: revisedDesc.trim() };
+        // Check for revised fix within the section
+        const revisedFix = getSectionValue(sections, ["revised fix", "revised_fix"]);
+        if (revisedFix) {
+          const parsedRevisedFix = extractTextAndFirstCode(revisedFix);
+          finding.revised_finding.suggested_fix = {};
+          if (parsedRevisedFix.text) finding.revised_finding.suggested_fix.description = parsedRevisedFix.text;
+          if (parsedRevisedFix.code) finding.revised_finding.suggested_fix.code = parsedRevisedFix.code;
+        }
+      }
+      
+      // Parse optional counter_evidence (for action=reject)
+      const counterEvidence = getSectionValue(sections, ["counter evidence", "counter_evidence", "counter-evidence"]);
+      if (counterEvidence) finding.counter_evidence = counterEvidence.trim();
     }
 
     findings.push(finding);
@@ -423,7 +466,7 @@ function parseToCanonicalJSON(markdownOutput, metadata) {
       round: meta.round || 1,
       summary: {
         files_reviewed: meta.files_reviewed || 0,
-        issues_found: findings.length,
+        issues_found: findings.filter(f => f.type === 'issue').length,
         issues_fixed: 0,
         issues_disputed: 0,
       },
@@ -462,7 +505,7 @@ function convertToSARIF(canonicalJSON) {
   const results = [];
   
   for (const finding of canonicalJSON.findings) {
-    // Skip non-issue findings (PERSPECTIVE, CROSS) for SARIF
+    // Skip non-issue findings (PERSPECTIVE, CROSS, RESPONSE) for SARIF
     if (finding.type !== 'issue') continue;
     
     const normalizedSeverity = normalizeSeverity(finding.severity || finding.raw_severity);
@@ -685,13 +728,51 @@ function convertToMarkdown(canonicalJSON) {
     }
   }
   
-  // Render other findings (PERSPECTIVE, CROSS)
+  // Render other findings (PERSPECTIVE, CROSS, RESPONSE)
   if (otherFindings.length > 0) {
     lines.push("## Other Findings\n");
     for (const finding of otherFindings) {
       lines.push(`### ${finding.id}: ${finding.title}`);
       lines.push(`- **Type**: ${finding.type}`);
       lines.push(`- **Confidence**: ${finding.confidence}\n`);
+      
+      // RESPONSE-specific rendering
+      if (finding.type === "response") {
+        if (finding.action) {
+          lines.push(`**Action**: ${finding.action}`);
+        } else if (finding.raw_action) {
+          lines.push(`**Action**: ${finding.raw_action} (invalid - must be accept/reject/revise)`);
+        }
+        if (finding.reason) lines.push(`**Reason**: ${finding.reason}`);
+        if (finding.target) lines.push(`**Target**: ${finding.target}`);
+        
+        // Render revised_finding if action=revise
+        if (finding.revised_finding) {
+          lines.push("\n**Revised Finding**:");
+          if (finding.revised_finding.description) {
+            lines.push(finding.revised_finding.description);
+          }
+          if (finding.revised_finding.suggested_fix) {
+            lines.push("\n**Revised Fix**:");
+            if (finding.revised_finding.suggested_fix.description) {
+              lines.push(finding.revised_finding.suggested_fix.description);
+            }
+            if (finding.revised_finding.suggested_fix.code) {
+              lines.push("```");
+              lines.push(finding.revised_finding.suggested_fix.code);
+              lines.push("```");
+            }
+          }
+        }
+        
+        // Render counter_evidence if action=reject
+        if (finding.counter_evidence) {
+          lines.push("\n**Counter Evidence**:");
+          lines.push(finding.counter_evidence);
+        }
+        
+        lines.push("");
+      }
       
       if (finding.content) {
         lines.push(finding.content);
