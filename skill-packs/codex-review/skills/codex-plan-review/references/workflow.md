@@ -6,7 +6,6 @@
 - Session context: constraints, assumptions, tech stack.
 - Acceptance criteria (user-provided or derived from plan).
 - Debate effort level (`low|medium|high|xhigh`).
-- Output format (`markdown|json|sarif|both`, default: `markdown`).
 
 ## 1.5) Pre-flight Checks
 
@@ -29,7 +28,7 @@ Before starting Round 1:
 
 ## 2) Start Round 1
 ```bash
-STATE_OUTPUT=$(printf '%s' "$PROMPT" | node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT" --format "$FORMAT")
+STATE_OUTPUT=$(printf '%s' "$PROMPT" | node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT")
 STATE_DIR=${STATE_OUTPUT#CODEX_STARTED:}
 ```
 
@@ -79,7 +78,7 @@ Build the rebuttal prompt from `references/prompts.md` (Rebuttal Prompt template
 
 ```bash
 STATE_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" start \
-  --working-dir "$PWD" --thread-id "$THREAD_ID" --effort "$EFFORT" --format "$FORMAT")
+  --working-dir "$PWD" --thread-id "$THREAD_ID" --effort "$EFFORT")
 STATE_DIR=${STATE_OUTPUT#CODEX_STARTED:}
 ```
 

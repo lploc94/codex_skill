@@ -28,10 +28,10 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Ask user** to choose debate effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Ask output format: `markdown` (default), `json`, `sarif`, or `both`. Set `EFFORT` and `FORMAT`.
+1. **Ask user** to choose debate effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Set `EFFORT`.
 2. Run pre-flight checks (see `references/workflow.md` §1.5).
 3. Build prompt from `references/prompts.md` (`Plan Review Prompt`), following the Placeholder Injection Guide.
-4. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT" --format "$FORMAT"`.
+4. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT"`.
 5. Poll with adaptive intervals (Round 1: 60s/60s/30s/15s..., Round 2+: 30s/15s...). After each poll, report **specific activities** from poll output (e.g. which files Codex is reading, what topic it is analyzing). See `references/workflow.md` for parsing guide. NEVER report generic "Codex is running" — always extract concrete details.
 6. Parse Codex issues (`ISSUE-{N}` + `VERDICT`) using `references/output-format.md`.
 7. Apply valid fixes to the plan, **save the plan file**, rebut invalid points, and resume with `--thread-id`.
@@ -45,16 +45,6 @@ RUNNER="{{RUNNER_PATH}}"
 | `medium` | Standard review   | Most day-to-day work            | ~5-8 min |
 | `high`   | Deep analysis     | Important features              | ~10-15 min |
 | `xhigh`  | Exhaustive        | Critical/security-sensitive     | ~20-30 min |
-
-### Output Format Guide
-| Format     | Output Files                          | Best for                        |
-|------------|---------------------------------------|---------------------------------|
-| `markdown` | `review.md` (human-readable)          | Default, interactive review     |
-| `json`     | `review.md` + `review.json`           | CI/CD integration, automation   |
-| `sarif`    | `review.md` + `review.sarif.json`     | IDE integration (VS Code, etc.) |
-| `both`     | `review.md` + `review.json` + `review.sarif.json` | Complete documentation          |
-
-**Note**: `review.md` is always written as the primary markdown output.
 
 ## Required References
 - Detailed execution steps: `references/workflow.md`

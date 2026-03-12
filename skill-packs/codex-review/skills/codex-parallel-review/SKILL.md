@@ -22,9 +22,9 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Collect inputs**: effort level, review mode (`full-codebase` default / `working-tree` / `branch`), max debate rounds (default: 3), output format (`markdown` default, `json`, `sarif`, or `both`). Capture file list (+ diff if applicable).
+1. **Collect inputs**: effort level, review mode (`full-codebase` default / `working-tree` / `branch`), max debate rounds (default: 3). Capture file list (+ diff if applicable).
 2. **Launch all 5 reviewers in ONE message** (true parallelism):
-   - Start Codex via runner with `--format "$FORMAT"` (background subprocess).
+   - Start Codex via runner (background subprocess).
    - Spawn 4 `code-reviewer` agents via Agent tool with `run_in_background: true`:
      - Agent 1: correctness + edge cases
      - Agent 2: security (DEEP — OWASP Top 10, secrets, crypto, deps, auth flow)
@@ -44,16 +44,6 @@ RUNNER="{{RUNNER_PATH}}"
 | `medium` | Standard review   | Most day-to-day work            |
 | `high`   | Deep analysis     | Important features              |
 | `xhigh`  | Exhaustive        | Critical/security-sensitive     |
-
-### Output Format Guide
-| Format     | Output Files                          | Best for                        |
-|------------|---------------------------------------|---------------------------------|
-| `markdown` | `review.md` (human-readable)          | Default, interactive review     |
-| `json`     | `review.md` + `review.json`           | CI/CD integration, automation   |
-| `sarif`    | `review.md` + `review.sarif.json`     | IDE integration (VS Code, etc.) |
-| `both`     | `review.md` + `review.json` + `review.sarif.json` | Complete documentation          |
-
-**Note**: `review.md` is always written as the primary markdown output. Codex output uses specified format; Claude agents produce markdown (merged into final report).
 
 ## Required References
 - Detailed execution + Agent tool JSON: `references/workflow.md`

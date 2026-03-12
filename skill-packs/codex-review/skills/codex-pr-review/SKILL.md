@@ -21,9 +21,9 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Ask user** to choose review effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Ask for base branch (discover and validate — see workflow.md). Ask for PR title and description (optional). Ask output format: `markdown` (default), `json`, `sarif`, or `both`. Set `EFFORT` and `FORMAT`.
+1. **Ask user** to choose review effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Ask for base branch (discover and validate — see workflow.md). Ask for PR title and description (optional). Set `EFFORT`.
 2. Gather branch diff, commit log, file stats. Build prompt from `references/prompts.md`.
-3. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT" --format "$FORMAT"`.
+3. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT"`.
 4. Poll with adaptive intervals (Round 1: 60s/60s/30s/15s..., Round 2+: 30s/15s...). After each poll, report **specific activities** from poll output (e.g. which files Codex is reading, what topic it is analyzing). See `references/workflow.md` for parsing guide. NEVER report generic "Codex is running" — always extract concrete details.
 5. Parse issue list with `references/output-format.md`.
 6. Fix valid code issues; rebut invalid findings with evidence.
@@ -37,16 +37,6 @@ RUNNER="{{RUNNER_PATH}}"
 | `medium` | Standard review   | Most day-to-day work            |
 | `high`   | Deep analysis     | Important features              |
 | `xhigh`  | Exhaustive        | Critical/security-sensitive     |
-
-### Output Format Guide
-| Format     | Output Files                          | Best for                        |
-|------------|---------------------------------------|---------------------------------|
-| `markdown` | `review.md` (human-readable)          | Default, interactive review     |
-| `json`     | `review.md` + `review.json`           | CI/CD integration, automation   |
-| `sarif`    | `review.md` + `review.sarif.json`     | IDE integration (VS Code, etc.) |
-| `both`     | `review.md` + `review.json` + `review.sarif.json` | Complete documentation          |
-
-**Note**: `review.md` is always written as the primary markdown output.
 
 ## Required References
 - Detailed execution: `references/workflow.md`

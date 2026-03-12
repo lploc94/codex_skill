@@ -21,32 +21,23 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Ask user** to choose review effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Ask review mode: `working-tree` (default) or `branch`. If branch mode, ask for base branch name and validate (see workflow.md for base branch discovery). Ask output format: `markdown` (default), `json`, `sarif`, or `both`. Set `EFFORT`, `MODE`, and `FORMAT`.
-2. Build prompt from `references/prompts.md` (Working Tree or Branch Review Prompt).
-3. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT" --format "$FORMAT"`.
-4. Poll with adaptive intervals (Round 1: 60s/60s/30s/15s..., Round 2+: 30s/15s...). After each poll, report **specific activities** from poll output (e.g. which files Codex is reading, what topic it is analyzing). See `references/workflow.md` for parsing guide. NEVER report generic "Codex is running" — always extract concrete details.
-5. Parse issue list with `references/output-format.md`.
-6. Fix valid issues in code; rebut invalid findings with evidence.
-7. Resume debate via `--thread-id` until `APPROVE` or stalemate.
-8. Return final review summary and unresolved risks.
+1. **Ask user** to choose review effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Ask review mode: `working-tree` (default) or `branch`. If branch mode, ask for base branch name and validate (see workflow.md for base branch discovery). Set `EFFORT` and `MODE`.
+2. Run pre-flight checks (see `references/workflow.md` §1.5).
+3. Build prompt from `references/prompts.md` (Working Tree or Branch Review Prompt), following the Placeholder Injection Guide.
+4. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT"`.
+5. Poll with adaptive intervals (Round 1: 60s/60s/30s/15s..., Round 2+: 30s/15s...). After each poll, report **specific activities** from poll output (e.g. which files Codex is reading, what topic it is analyzing). See `references/workflow.md` for parsing guide. NEVER report generic "Codex is running" — always extract concrete details.
+6. Parse issue list with `references/output-format.md`.
+7. Fix valid issues in code; rebut invalid findings with evidence.
+8. Resume debate via `--thread-id` until `APPROVE`, stalemate, or hard cap (5 rounds).
+9. Return final review summary, residual risks, and recommended next steps.
 
 ### Effort Level Guide
-| Level    | Depth             | Best for                        |
-|----------|-------------------|---------------------------------|
-| `low`    | Surface check     | Quick sanity check              |
-| `medium` | Standard review   | Most day-to-day work            |
-| `high`   | Deep analysis     | Important features              |
-| `xhigh`  | Exhaustive        | Critical/security-sensitive     |
-
-### Output Format Guide
-| Format     | Output Files                          | Best for                        |
-|------------|---------------------------------------|---------------------------------|
-| `markdown` | `review.md` (human-readable)          | Default, interactive review     |
-| `json`     | `review.md` + `review.json`           | CI/CD integration, automation   |
-| `sarif`    | `review.md` + `review.sarif.json`     | IDE integration (VS Code, etc.) |
-| `both`     | `review.md` + `review.json` + `review.sarif.json` | Complete documentation          |
-
-**Note**: `review.md` is always written as the primary markdown output.
+| Level    | Depth             | Best for                        | Typical time |
+|----------|-------------------|---------------------------------|-------------|
+| `low`    | Surface check     | Quick sanity check              | ~2-3 min |
+| `medium` | Standard review   | Most day-to-day work            | ~5-8 min |
+| `high`   | Deep analysis     | Important features              | ~10-15 min |
+| `xhigh`  | Exhaustive        | Critical/security-sensitive     | ~20-30 min |
 
 ## Required References
 - Detailed execution: `references/workflow.md`
@@ -54,6 +45,7 @@ RUNNER="{{RUNNER_PATH}}"
 - Output contract: `references/output-format.md`
 
 ## Rules
+- If invoked during Claude Code plan mode, exit plan mode first — this skill requires code editing.
 - Codex reviews only; it does not edit files.
 - Preserve functional intent unless fix requires behavior change.
 - Every accepted issue must map to a concrete code diff.
