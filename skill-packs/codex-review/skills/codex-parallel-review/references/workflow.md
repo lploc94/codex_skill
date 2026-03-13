@@ -147,7 +147,7 @@ Across the 4 agents, some findings may overlap (e.g., Agent 1 flags a null check
 - Renumber all Claude findings sequentially: FINDING-1, FINDING-2, ...
 
 ### 4b) Cross-match Claude vs Codex
-1. Parse Codex `review.txt` for `ISSUE-{N}` blocks.
+1. Parse Codex `review.md` for `ISSUE-{N}` blocks.
 2. Match using heuristic:
    - **Same file + overlapping location + same category** → `agreed`
    - **Same file + same category + different location** → check if same root cause → `agreed` or `unique`
@@ -252,9 +252,9 @@ Always run regardless of outcome (success, failure, timeout, stalemate).
 
 ### Codex Runner Errors
 Runner `poll` returns `POLL:<status>:<elapsed>[:exit_code:details]`:
-- `POLL:completed:...` → success, read `review.txt`.
+- `POLL:completed:...` → success, read `review.md`.
 - `POLL:failed:...:3:...` → turn failed. Retry once. If still fails, report error.
-- `POLL:timeout:...:2:...` → timeout. Use partial results if `review.txt` exists.
+- `POLL:timeout:...:2:...` → timeout. Use partial results if `review.md` exists.
 - `POLL:stalled:...:4:...` → stalled. Use partial results.
 
 Runner `start` exit codes:

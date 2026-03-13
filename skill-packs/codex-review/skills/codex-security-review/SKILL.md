@@ -21,9 +21,9 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Ask user** to choose review effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Ask review scope: `working-tree` (uncommitted changes), `branch` (branch diff), or `full` (entire codebase). Ask output format: `markdown` (default), `json`, `sarif`, or `both`. Set `EFFORT`, `SCOPE`, and `FORMAT`.
+1. **Ask user** to choose review effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Ask review scope: `working-tree` (uncommitted changes), `branch` (branch diff), or `full` (entire codebase). Set `EFFORT` and `SCOPE`.
 2. Build prompt from `references/prompts.md` (Security Review Prompt with OWASP checklist).
-3. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT" --format "$FORMAT"`.
+3. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT"`.
 4. Poll with adaptive intervals (Round 1: 60s/60s/30s/15s..., Round 2+: 30s/15s...). After each poll, report **specific activities** from poll output (e.g. which files Codex is analyzing, what vulnerability patterns it's checking). See `references/workflow.md` for parsing guide. NEVER report generic "Codex is running" — always extract concrete details.
 5. Parse security findings with `references/output-format.md` (includes CWE/OWASP mappings).
 6. Fix valid vulnerabilities in code; rebut false positives with evidence.
@@ -44,16 +44,6 @@ RUNNER="{{RUNNER_PATH}}"
 | `working-tree` | Uncommitted changes only           | Pre-commit security check   |
 | `branch`       | Branch diff vs base                | Pre-merge security review   |
 | `full`         | Entire codebase                    | Security audit              |
-
-### Output Format Guide
-| Format     | Output Files                          | Best for                        |
-|------------|---------------------------------------|---------------------------------|
-| `markdown` | `review.txt` (human-readable)         | Default, interactive review     |
-| `json`     | `review.txt` + `review.json`          | CI/CD integration, automation   |
-| `sarif`    | `review.txt` + `review.sarif.json`    | IDE integration (VS Code, etc.) |
-| `both`     | All above + `review.md` (rendered)    | Complete documentation          |
-
-**Note**: `review.txt` is always written for backward compatibility. SARIF format is ideal for security findings as it's supported by GitHub Security tab and most security tools.
 
 ## Security Categories Covered
 

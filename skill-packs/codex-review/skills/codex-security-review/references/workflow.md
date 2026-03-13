@@ -91,7 +91,7 @@ node "$RUNNER" poll "$STATE_DIR"
 
 When poll returns `POLL:complete`:
 
-1. Read review output from `$STATE_DIR/review.txt`
+1. Read review output from `$STATE_DIR/review.md`
 2. Parse ISSUE-{N} blocks using regex:
    ```regex
    ISSUE-(\d+): (.+?)\n
@@ -291,7 +291,7 @@ node "$RUNNER" stop "$STATE_DIR"
 ```bash
 # Copy review artifacts to project docs
 mkdir -p docs/security-reviews
-cp "$STATE_DIR/review.txt" "docs/security-reviews/review-$(date +%Y%m%d).md"
+cp "$STATE_DIR/review.md" "docs/security-reviews/review-$(date +%Y%m%d).md"
 cp "$STATE_DIR/output.jsonl" "docs/security-reviews/review-$(date +%Y%m%d).jsonl"
 ```
 
@@ -501,7 +501,7 @@ echo "$SECURITY_PROMPT" | node "$RUNNER" start --working-dir "$PWD" --effort hig
 echo "Running security review on staged changes..."
 node "$RUNNER" start --working-dir "$PWD" --effort low
 
-if grep -q "VERDICT: REVISE" .codex-review/runs/*/review.txt; then
+if grep -q "VERDICT: REVISE" .codex-review/runs/*/review.md; then
   echo "❌ Security issues found. Commit blocked."
   echo "Run 'codex-security-review' for details."
   exit 1
@@ -527,7 +527,7 @@ jobs:
       - name: Run Security Review
         run: |
           node codex-runner.js start --working-dir . --effort high
-          cat .codex-review/runs/*/review.txt >> $GITHUB_STEP_SUMMARY
+          cat .codex-review/runs/*/review.md >> $GITHUB_STEP_SUMMARY
 ```
 
 ---

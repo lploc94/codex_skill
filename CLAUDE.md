@@ -165,10 +165,26 @@ skill-packs/codex-review/
 - Single shared runner at skill-pack level, not duplicated per skill.
 - `skill-packs/` is the single source of truth for templates and runner.
 
+## Breaking Changes
+
+### v10: review.txt → review.md
+- **Output file renamed**: `review.txt` is no longer created. All markdown review output is now written to `review.md`.
+- **format="both" simplified**: Previously wrote `review.txt` + `review.json` + `review.sarif.json` + `review.md` (re-rendered from JSON). Now writes `review.md` (original markdown) + `review.json` + `review.sarif.json`. The re-rendered markdown is removed since `review.md` is the primary output.
+- **CI/CD impact**: Any scripts referencing `review.txt` must be updated to use `review.md`.
+- **Existing state directories**: Old runs in `.codex-review/runs/*/` may still contain `review.txt` from v9. These are not retroactively renamed.
+- **Historical docs**: SESSION_SUMMARY.md, PROGRESS_REPORT.md, FINAL_REPORT.md reference v9 behavior and are not updated.
+- See v11 — format options fully removed.
+
+### v11: Remove JSON/SARIF output formats
+- **`--format` flag removed**: Runner only produces markdown. `review.md` is the sole output.
+- **Files no longer generated**: `review.json`, `review.sarif.json`
+- **Test files deleted**: `test-converters.js`, `test-converters-comprehensive.js`, `test-integration.js`
+- **Schema doc deleted**: `docs/CANONICAL_JSON_SCHEMA.md`
+
 ## Verification
 
 1. `node bin/codex-skill.js` — installer chạy thành công
-2. `node skill-packs/codex-review/scripts/codex-runner.js version` — in version `8`
+2. `node skill-packs/codex-review/scripts/codex-runner.js version` — in version `11`
 3. `ls ~/.claude/skills/codex-review/` — chứa `scripts/`
 4. SKILL.md chứa absolute path, không search loop
 5. Invoke `/codex-plan-review`, `/codex-impl-review`, `/codex-think-about`, `/codex-commit-review`, `/codex-pr-review`, `/codex-parallel-review`, `/codex-codebase-review` trong Claude Code

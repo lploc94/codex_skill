@@ -320,7 +320,7 @@ Stop ALL tracked STATE_DIRs. Always run regardless of outcome (success, failure,
 ### Chunk Failure
 - Runner returns `POLL:failed` → retry chunk 1 time.
 - Still fails → skip chunk, note in report as "SKIPPED: {reason}".
-- If partial `review.txt` exists → use partial results.
+- If partial `review.md` exists → use partial results.
 
 ### Threshold: >50% Chunks Failed
 - Warn user: "More than half of chunks failed. Results may be incomplete."
@@ -345,7 +345,7 @@ Stop ALL tracked STATE_DIRs. Always run regardless of outcome (success, failure,
 
 ### Poll Status Handling
 Parse `POLL:<status>:<elapsed>[:exit_code:details]`:
-- `POLL:completed:...` → success, read `review.txt`.
+- `POLL:completed:...` → success, read `review.md`.
 - `POLL:failed:...:3:...` → turn failed. Retry once.
 - `POLL:timeout:...:2:...` → timeout. Use partial results if available.
 - `POLL:stalled:...:4:...` → stalled. Use partial results.

@@ -18,9 +18,26 @@ Ask user: `working-tree` (default) or `branch`.
   3. Fallback order if user doesn't specify: `main` → `master` → remote HEAD (`git symbolic-ref refs/remotes/origin/HEAD`).
   4. Confirm with user if using fallback.
 - **Clean working tree required**: run `git diff --quiet && git diff --cached --quiet`. If uncommitted changes exist, tell user to commit or stash first, or switch to working-tree mode.
+- **Stale base warning**: If base branch is local-only, recommend `git fetch origin <base>` before review. Stale base can cause incorrect diff scope.
 - Branch diff: `git diff <base>...HEAD`.
 - Commit log: `git log <base>..HEAD --oneline`.
 - Optional plan file for intent alignment.
+
+## 1.5) Pre-flight Checks
+
+Before starting Round 1:
+1. Working-tree mode: verify working tree has changes: `git diff --quiet && git diff --cached --quiet` should FAIL (exit 1). If both succeed (exit 0), there are no changes — report to user and stop.
+2. Branch mode: verify branch diff exists: `git diff <base>...HEAD --quiet` should FAIL. If no diff, report to user and stop.
+3. Verify `codex` CLI is in PATH: `command -v codex`. If not found, tell user to install.
+4. Verify working directory is writable (for state directory creation).
+
+## 1.8) Prompt Assembly
+
+1. Read the appropriate Round 1 template from `references/prompts.md` (Working Tree or Branch).
+2. Replace `{USER_REQUEST}` with user's task description (or default).
+3. Build `{SESSION_CONTEXT}` using the structured schema from `references/prompts.md` Placeholder Injection Guide.
+4. Replace `{OUTPUT_FORMAT}` by copying the entire fenced code block from `references/output-format.md`.
+5. For branch mode: replace `{BASE_BRANCH}` with the validated base branch name.
 
 ## 2) Start Round 1
 ```bash
@@ -46,15 +63,15 @@ Adaptive intervals — start slow, speed up:
 - Poll 1: wait 30s
 - Poll 2+: wait 15s
 
-After each poll, parse the status lines and report **specific activities** to the user. NEVER say generic messages like "Codex đang hoạt động" or "tiếp tục chờ" — these provide no information.
+After each poll, parse the status lines and report **specific activities** to the user. NEVER say generic messages like "Codex is running" or "still waiting" — these provide no information.
 
 **How to parse poll output for user reporting:**
 Poll output contains lines like `[Ns] Codex thinking: ...`, `[Ns] Codex running: ...`, `[Ns] Codex completed: ...`. Extract and summarize:
-- `Codex thinking: "**Some topic**"` → Report: "Codex đang phân tích: {topic}"
-- `Codex running: /bin/zsh -lc 'git diff ...'` → Report: "Codex đang đọc diff của repo"
-- `Codex running: /bin/zsh -lc 'cat src/foo.ts'` → Report: "Codex đang đọc file `src/foo.ts`"
-- `Codex running: /bin/zsh -lc 'rg -n "pattern" ...'` → Report: "Codex đang tìm kiếm `pattern` trong code"
-- Multiple completed commands → Summarize: "Codex đã đọc {N} files, đang phân tích kết quả"
+- `Codex thinking: "**Some topic**"` → Report: "Codex is analyzing: {topic}"
+- `Codex running: /bin/zsh -lc 'git diff ...'` → Report: "Codex is reading the repo diff"
+- `Codex running: /bin/zsh -lc 'cat src/foo.ts'` → Report: "Codex is reading file `src/foo.ts`"
+- `Codex running: /bin/zsh -lc 'rg -n "pattern" ...'` → Report: "Codex is searching for `pattern` in code"
+- Multiple completed commands → Summarize: "Codex has read {N} files, analyzing results"
 
 **Report template:** "Codex [{elapsed}s]: {specific activity summary}" — always include elapsed time and concrete description of what Codex is doing or just did.
 
@@ -66,18 +83,42 @@ Stop on `completed|failed|timeout|stalled`.
 - For valid issues: edit code and record fix evidence.
 - For invalid issues: write rebuttal with concrete proof (paths, tests, behavior).
 - **Branch mode only**: after applying fixes, commit them (`git add` + `git commit`) before resuming. Codex reads `git diff <base>...HEAD` which only includes committed changes — uncommitted fixes will be invisible to Codex and cause repeated issues.
+- After applying fixes, verify with the narrowest relevant automated check:
+  - If test suite exists: run relevant tests.
+  - If type-checked language: run typecheck/compile.
+  - If no suitable automation: document manual fix evidence (diff + reasoning + affected paths).
+  - Do NOT claim an issue is fixed without some form of verification evidence.
+- Record the set of open (unresolved) ISSUE-{N} IDs for stalemate tracking.
 
 ## 5) Resume Thread
+
+Build the rebuttal prompt from `references/prompts.md` — use the **Working-tree mode** or **Branch mode** Rebuttal Prompt template depending on the review mode. For branch mode, replace all `{BASE_BRANCH}` placeholders so Codex re-reads the correct diff scope. Replace all other placeholders (`{SESSION_CONTEXT}`, `{OUTPUT_FORMAT}`, etc.).
+
 ```bash
 STATE_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" start \
   --working-dir "$PWD" --thread-id "$THREAD_ID" --effort "$EFFORT")
+STATE_DIR=${STATE_OUTPUT#CODEX_STARTED:}
 ```
 
-**→ Go back to step 3 (Poll).** After poll completes, repeat step 4 (Apply/Rebut) and check completion criteria below. If not met, resume again (step 5). Continue this loop until a completion criterion is reached.
+**Update STATE_DIR** (each round creates a new state directory). Then **go back to step 3 (Poll).** After poll completes, repeat step 4 (Apply/Rebut) and check completion criteria below. If not met, resume again (step 5). Continue this loop until a completion criterion is reached.
 
 ## 6) Completion Criteria
 - Codex returns `VERDICT: APPROVE`.
 - Or user accepts a documented stalemate.
+- **Hard cap: 5 rounds.** At cap, force final synthesis with unresolved issues listed as residual risks.
+
+## Stalemate Detection
+
+Stalemate occurs when the set of unresolved ISSUE-{N} IDs is identical across 2 consecutive rounds:
+- Track: after each round, record the set of open (not fixed, not withdrawn) issue IDs.
+- If round N and round N-1 have the same open set AND Codex proposed no new issues, declare stalemate.
+- Issue renaming or splitting counts as a new issue (different ID).
+
+At stalemate:
+1. List specific deadlocked points with both sides' final arguments.
+2. Recommend which side to favor based on evidence strength.
+3. If current round < 5, ask user: accept current state or force one more round.
+4. If current round = 5 (hard cap), do NOT offer another round. Force final synthesis.
 
 ## 7) Final Output
 
@@ -93,7 +134,8 @@ STATE_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" start \
 Then present:
 - Fixed defects by severity.
 - Disputed items and rationale.
-- Residual risk (if any).
+- Residual risks and unresolved assumptions.
+- Recommended next steps.
 
 ## 8) Cleanup
 ```bash
@@ -103,27 +145,19 @@ Remove the state directory and kill any remaining Codex/watchdog processes. Alwa
 
 ## Error Handling
 
-Runner `poll` trả status qua output string `POLL:<status>:<elapsed>[:exit_code:details]`. Thông thường exit 0, nhưng có thể exit non-zero khi state dir invalid hoặc I/O error — cần xử lý cả hai trường hợp:
+Runner `poll` returns status via output string `POLL:<status>:<elapsed>[:exit_code:details]`. Normally exits 0, but may exit non-zero on invalid state dir or I/O error — handle both:
 
 **Parse POLL string (exit 0):**
-- `POLL:completed:...` → thành công, đọc review.txt
-- `POLL:failed:...:3:...` → turn failed. Retry 1 lần. Nếu vẫn fail, report error.
-- `POLL:timeout:...:2:...` → timeout. Report partial results nếu review.txt tồn tại. Suggest retry với lower effort.
+- `POLL:completed:...` → success, read review.md
+- `POLL:failed:...:3:...` → turn failed. Retry once. If still failing, report error to user.
+- `POLL:timeout:...:2:...` → timeout. Report partial results if review.md exists. Suggest retry with lower effort.
 - `POLL:stalled:...:4:...` → stalled. Report partial results. Suggest lower effort.
 
-**Fallback khi poll exit non-zero hoặc output không parse được:**
-- Log error output, report lỗi hạ tầng cho user, suggest retry.
+**Fallback when poll exits non-zero or output is unparseable:**
+- Log error output, report infrastructure error to user, suggest retry.
 
-Runner `start` có thể fail với exit code:
-- 1 → generic error (invalid args, I/O). Report error message.
-- 5 → Codex CLI not found. Tell user to install.
+Runner `start` may fail with exit code:
+- 1 → generic error (invalid args, I/O). Report error message to user.
+- 5 → Codex CLI not found. Tell user to install codex.
 
 Always run cleanup (step 8) regardless of error.
-
-## Stalemate Handling
-
-When stalemate detected (same unresolved points for two consecutive rounds):
-1. List specific deadlocked points.
-2. Show each side's final argument for each point.
-3. Recommend which side user should favor.
-4. Ask user: accept current state or force one more round.

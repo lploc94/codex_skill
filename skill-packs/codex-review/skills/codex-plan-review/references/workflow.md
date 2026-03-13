@@ -1,10 +1,30 @@
 # Plan Review Workflow
 
 ## 1) Gather Inputs
-- Plan file path.
-- User request text.
-- Session context and constraints.
-- Debate effort (`low|medium|high|xhigh`).
+- Plan file path (absolute). Must be a Markdown file.
+- User request text (or default: "Review this plan for quality and completeness").
+- Session context: constraints, assumptions, tech stack.
+- Acceptance criteria (user-provided or derived from plan).
+- Debate effort level (`low|medium|high|xhigh`).
+
+## 1.5) Pre-flight Checks
+
+Before starting Round 1:
+1. Verify plan file exists and is readable: `test -r "$PLAN_PATH"`. If not, report error and stop.
+2. Verify plan file is writable: `test -w "$PLAN_PATH"`. If not writable, stop and ask user to provide a writable plan path. Multi-round debate requires saving plan edits in-place.
+3. Verify plan file is Markdown (`.md` extension or contains markdown headings).
+4. Verify `codex` CLI is in PATH: `command -v codex`. If not found, tell user to install.
+5. Verify working directory is writable (for state directory creation).
+6. If acceptance criteria not provided by user, derive from plan: scan for headings like "Goals", "Outcomes", "Success criteria", "Expected results" and extract content.
+
+## 1.8) Prompt Assembly
+
+1. Read the Round 1 template from `references/prompts.md`.
+2. Replace `{PLAN_PATH}` with the absolute path to the plan file.
+3. Replace `{USER_REQUEST}` with user's task description (or default).
+4. Build `{SESSION_CONTEXT}` using the structured schema from `references/prompts.md` Placeholder Injection Guide.
+5. Replace `{OUTPUT_FORMAT}` by copying the entire fenced code block from `references/output-format.md` (the single block after "Use this exact shape").
+6. Replace `{ACCEPTANCE_CRITERIA}` with user-provided criteria or derived criteria from step 1.5.
 
 ## 2) Start Round 1
 ```bash
@@ -30,15 +50,14 @@ Adaptive intervals — start slow, speed up:
 - Poll 1: wait 30s
 - Poll 2+: wait 15s
 
-After each poll, parse the status lines and report **specific activities** to the user. NEVER say generic messages like "Codex đang hoạt động" or "tiếp tục chờ" — these provide no information.
+After each poll, parse the status lines and report **specific activities** to the user. NEVER say generic messages like "Codex is running" or "still waiting" — these provide no information.
 
 **How to parse poll output for user reporting:**
 Poll output contains lines like `[Ns] Codex thinking: ...`, `[Ns] Codex running: ...`, `[Ns] Codex completed: ...`. Extract and summarize:
-- `Codex thinking: "**Some topic**"` → Report: "Codex đang phân tích: {topic}"
-- `Codex running: /bin/zsh -lc 'git diff ...'` → Report: "Codex đang đọc diff của repo"
-- `Codex running: /bin/zsh -lc 'cat src/foo.ts'` → Report: "Codex đang đọc file `src/foo.ts`"
-- `Codex running: /bin/zsh -lc 'rg -n "pattern" ...'` → Report: "Codex đang tìm kiếm `pattern` trong code"
-- Multiple completed commands → Summarize: "Codex đã đọc {N} files, đang phân tích kết quả"
+- `Codex thinking: "**Some topic**"` → Report: "Codex is analyzing: {topic}"
+- `Codex running: /bin/zsh -lc 'cat plan.md'` → Report: "Codex is reading the plan file"
+- `Codex running: /bin/zsh -lc 'rg -n "pattern" ...'` → Report: "Codex is searching for `pattern` in the codebase"
+- Multiple completed commands → Summarize: "Codex has read {N} files, analyzing results"
 
 **Report template:** "Codex [{elapsed}s]: {specific activity summary}" — always include elapsed time and concrete description of what Codex is doing or just did.
 
@@ -46,23 +65,43 @@ Continue while status is `running`.
 Stop on `completed|failed|timeout|stalled`.
 
 ## 4) Parse Review
-- Read `THREAD_ID:` and `review.txt` from runner output/state directory.
+- Read `THREAD_ID:` and `review.md` from runner output/state directory.
 - Extract `ISSUE-{N}` blocks.
 - Apply accepted fixes to plan.
+- **Save the updated plan file before resuming.** Codex round 2+ will re-read it from the plan path.
 - Build rebuttal packet for disputed items.
+- Record the set of open (unresolved) ISSUE-{N} IDs for stalemate tracking.
 
 ## 5) Resume (Round 2+)
+
+Build the rebuttal prompt from `references/prompts.md` (Rebuttal Prompt template). Replace all placeholders including `{PLAN_PATH}` so Codex re-reads the updated plan.
+
 ```bash
 STATE_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" start \
   --working-dir "$PWD" --thread-id "$THREAD_ID" --effort "$EFFORT")
+STATE_DIR=${STATE_OUTPUT#CODEX_STARTED:}
 ```
 
-**→ Go back to step 3 (Poll).** After poll completes, repeat step 4 (Parse) and check stop conditions below. If not met, resume again (step 5). Continue this loop until a stop condition is reached.
+**Update STATE_DIR** (each round creates a new state directory). Then **go back to step 3 (Poll).** After poll completes, repeat step 4 (Parse) and check stop conditions below. If not met, resume again (step 5). Continue this loop until a stop condition is reached.
 
 ## 6) Stop Conditions
 - `VERDICT: APPROVE`.
-- Stalemate (same unresolved points for two consecutive rounds).
+- Stalemate detected (see below).
 - User stops debate.
+- **Hard cap: 5 rounds.** At cap, force final synthesis with unresolved issues listed as residual risks.
+
+## Stalemate Detection
+
+Stalemate occurs when the set of unresolved ISSUE-{N} IDs is identical across 2 consecutive rounds:
+- Track: after each round, record the set of open (not fixed, not withdrawn) issue IDs.
+- If round N and round N-1 have the same open set AND Codex proposed no new issues, declare stalemate.
+- Issue renaming or splitting counts as a new issue (different ID).
+
+At stalemate:
+1. List specific deadlocked points with both sides' final arguments.
+2. Recommend which side to favor based on evidence strength.
+3. If current round < 5, ask user: accept current state or force one more round.
+4. If current round = 5 (hard cap), do NOT offer another round. Force final synthesis.
 
 ## 7) Final Report
 
@@ -76,8 +115,10 @@ STATE_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" start \
 | Issues Disputed | {disputed_count} |
 
 Then present:
-- Accepted issues and plan edits.
-- Disputed issues with reasoning.
+- Accepted issues and plan edits made.
+- Disputed issues with reasoning from both sides.
+- Residual risks and unresolved assumptions.
+- Recommended next steps before implementation.
 - Final plan path.
 
 ## 8) Cleanup
@@ -88,27 +129,19 @@ Remove the state directory and kill any remaining Codex/watchdog processes. Alwa
 
 ## Error Handling
 
-Runner `poll` trả status qua output string `POLL:<status>:<elapsed>[:exit_code:details]`. Thông thường exit 0, nhưng có thể exit non-zero khi state dir invalid hoặc I/O error — cần xử lý cả hai trường hợp:
+Runner `poll` returns status via output string `POLL:<status>:<elapsed>[:exit_code:details]`. Normally exits 0, but may exit non-zero on invalid state dir or I/O error — handle both:
 
 **Parse POLL string (exit 0):**
-- `POLL:completed:...` → thành công, đọc review.txt
-- `POLL:failed:...:3:...` → turn failed. Retry 1 lần. Nếu vẫn fail, report error.
-- `POLL:timeout:...:2:...` → timeout. Report partial results nếu review.txt tồn tại. Suggest retry với lower effort.
+- `POLL:completed:...` → success, read review.md
+- `POLL:failed:...:3:...` → turn failed. Retry once. If still failing, report error to user.
+- `POLL:timeout:...:2:...` → timeout. Report partial results if review.md exists. Suggest retry with lower effort.
 - `POLL:stalled:...:4:...` → stalled. Report partial results. Suggest lower effort.
 
-**Fallback khi poll exit non-zero hoặc output không parse được:**
-- Log error output, report lỗi hạ tầng cho user, suggest retry.
+**Fallback when poll exits non-zero or output is unparseable:**
+- Log error output, report infrastructure error to user, suggest retry.
 
-Runner `start` có thể fail với exit code:
-- 1 → generic error (invalid args, I/O). Report error message.
-- 5 → Codex CLI not found. Tell user to install.
+Runner `start` may fail with exit code:
+- 1 → generic error (invalid args, I/O). Report error message to user.
+- 5 → Codex CLI not found. Tell user to install codex.
 
 Always run cleanup (step 8) regardless of error.
-
-## Stalemate Handling
-
-When stalemate detected (same unresolved points for two consecutive rounds):
-1. List specific deadlocked points.
-2. Show each side's final argument for each point.
-3. Recommend which side user should favor.
-4. Ask user: accept current state or force one more round.

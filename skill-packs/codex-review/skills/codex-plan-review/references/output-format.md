@@ -1,12 +1,18 @@
 # Output Format Contract
 
-Use this exact shape:
+> **ISSUE-{N} IDs must remain stable across rounds.** Do not renumber issues. New findings in later rounds use the next available number.
+
+> **Note**: Categories below are plan-specific (correctness, architecture, sequencing, risk, scope). For code review categories (bug, security, performance, etc.), see codex-impl-review.
+
+Use this exact shape (copy the entire block below as `{OUTPUT_FORMAT}`):
 
 ```markdown
 ### ISSUE-{N}: {Short title}
 - Category: correctness | architecture | sequencing | risk | scope
 - Severity: low | medium | high | critical
+- Plan section: {heading or line range in plan file}
 - Problem: {clear statement}
+- Evidence: {quote or reference from plan that shows the issue}
 - Why it matters: {impact}
 - Suggested fix: {plan-level change}
 
@@ -15,4 +21,4 @@ Use this exact shape:
 - Reason: {short reason}
 ```
 
-If no issues remain, return only `VERDICT` with `Status: APPROVE`.
+**Zero-issue rule**: If no issues remain, omit all ISSUE blocks and return only the VERDICT block with `Status: APPROVE` and `Reason: Plan is complete, well-structured, and addresses all acceptance criteria.`
