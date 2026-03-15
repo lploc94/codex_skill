@@ -42,6 +42,12 @@ node ~/.claude/skills/codex-review/scripts/codex-runner.js version
 npx github:lploc94/codex_skill
 ```
 
+### Auto-review guidance (optional)
+```bash
+npx github:lploc94/codex_skill --auto
+```
+Injects review guidance into `~/.claude/CLAUDE.md` so Claude Code proactively suggests the right review skill based on context (e.g., `/codex-impl-review` before commits, `/codex-security-review` for auth code). Idempotent — safe to re-run.
+
 ## Usage
 
 After install, start Claude Code and run:

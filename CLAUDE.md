@@ -4,7 +4,7 @@ This repository provides a single-command installer (`npx github:lploc94/codex_s
 
 ## Project Overview
 
-`codex-review` provides seven skills powered by OpenAI Codex CLI:
+`codex-review` provides eight skills powered by OpenAI Codex CLI:
 - `/codex-plan-review` — debate plans before implementation
 - `/codex-impl-review` — review uncommitted or branch changes before commit/merge
 - `/codex-think-about` — peer reasoning/debate on technical topics
@@ -12,6 +12,7 @@ This repository provides a single-command installer (`npx github:lploc94/codex_s
 - `/codex-pr-review` — review PRs (branch diff, commit hygiene, description)
 - `/codex-parallel-review` — parallel independent review by both Claude and Codex, then debate
 - `/codex-codebase-review` — chunked full-codebase review for large projects (50-500+ files)
+- `/codex-security-review` — security-focused review using OWASP Top 10 and CWE patterns
 
 ## Codebase Understanding Guidelines
 
@@ -48,6 +49,7 @@ This repository provides a single-command installer (`npx github:lploc94/codex_s
 
 ```bash
 node ./bin/codex-skill.js                                          # run installer locally
+node ./bin/codex-skill.js --auto                                   # install + inject guidance into ~/.claude/CLAUDE.md
 node skill-packs/codex-review/scripts/codex-runner.js version      # runner version
 ```
 
@@ -58,13 +60,15 @@ There is no build system, test suite, or linter. The project is JavaScript + Mar
 ### Installer
 
 `bin/codex-skill.js` — single file, Node.js stdlib only, no dependencies:
-1. Runtime guard: Node.js >= 22
-2. Build staging directory alongside install target
-3. Copy `codex-runner.js` from `skill-packs/`
-4. Read SKILL.md templates (contain `{{RUNNER_PATH}}`), inject absolute path, write to staging
-5. Copy `references/` directories as-is
-6. Verify runner by spawning `node codex-runner.js version`
-7. Atomic swap: backup old install → rename staging → cleanup
+1. Parse CLI arguments (`-full`, `--auto`)
+2. Runtime guard: Node.js >= 22
+3. Build staging directory alongside install target
+4. Copy `codex-runner.js` from `skill-packs/`
+5. Read SKILL.md templates (contain `{{RUNNER_PATH}}`), inject absolute path, write to staging
+6. Copy `references/` directories as-is
+7. Verify runner by spawning `node codex-runner.js version`
+8. Atomic swap: backup old install → rename staging → cleanup
+9. If `--auto`: inject review guidance into `~/.claude/CLAUDE.md` (idempotent, append-only)
 
 ### Skill Pack Layout (templates + runner)
 
@@ -92,7 +96,10 @@ skill-packs/codex-review/
     ├── codex-parallel-review/
     │   ├── SKILL.md
     │   └── references/
-    └── codex-codebase-review/
+    ├── codex-codebase-review/
+    │   ├── SKILL.md
+    │   └── references/
+    └── codex-security-review/
         ├── SKILL.md
         └── references/
 ```
@@ -129,13 +136,14 @@ skill-packs/codex-review/
 
 ### Core Execution Flow
 
-1. **Skill invocation** (`/codex-plan-review`, `/codex-impl-review`, `/codex-think-about`, `/codex-commit-review`, `/codex-pr-review`, `/codex-parallel-review`, or `/codex-codebase-review`) follows SKILL.md step-by-step
+1. **Skill invocation** (`/codex-plan-review`, `/codex-impl-review`, `/codex-think-about`, `/codex-commit-review`, `/codex-pr-review`, `/codex-parallel-review`, `/codex-codebase-review`, or `/codex-security-review`) follows SKILL.md step-by-step
 2. **Runner path**: SKILL.md contains hardcoded absolute path to `codex-runner.js`
 3. **codex-runner.js** spawns `codex exec --json --sandbox read-only` as a detached process, polls JSONL output
 4. **Review debate loop** (plan-review, impl-review, commit-review, pr-review): Claude Code parses Codex's `ISSUE-{N}` review → fixes/rebuts → resumes via `--thread-id` → repeats until `APPROVE` verdict or stalemate
 5. **Peer debate loop** (think-about): Claude Code and Codex think independently → discuss → exchange perspectives → repeat until consensus or stalemate → present to user
 6. **Parallel review loop** (parallel-review): Claude and Codex review independently in parallel → merge findings → debate disagreements → produce consensus report
 7. **Chunked codebase review** (codebase-review): split codebase into module chunks → review each chunk in independent Codex session → Claude synthesizes cross-cutting findings
+8. **Security review** (security-review): OWASP Top 10 + CWE pattern detection → Codex analyzes security-sensitive code → Claude validates findings and produces security report
 
 ### Key Design Decisions
 
@@ -187,4 +195,4 @@ skill-packs/codex-review/
 2. `node skill-packs/codex-review/scripts/codex-runner.js version` — in version `11`
 3. `ls ~/.claude/skills/codex-review/` — chứa `scripts/`
 4. SKILL.md chứa absolute path, không search loop
-5. Invoke `/codex-plan-review`, `/codex-impl-review`, `/codex-think-about`, `/codex-commit-review`, `/codex-pr-review`, `/codex-parallel-review`, `/codex-codebase-review` trong Claude Code
+5. Invoke `/codex-plan-review`, `/codex-impl-review`, `/codex-think-about`, `/codex-commit-review`, `/codex-pr-review`, `/codex-parallel-review`, `/codex-codebase-review`, `/codex-security-review` trong Claude Code

@@ -30,6 +30,7 @@ const CORE_SKILLS = ['codex-plan-review', 'codex-impl-review', 'codex-think-abou
 const FULL_SKILLS = ['codex-parallel-review', 'codex-codebase-review', 'codex-security-review'];
 
 const fullMode = process.argv.includes('-full');
+const autoMode = process.argv.includes('--auto');
 const SKILLS = fullMode ? [...CORE_SKILLS, ...FULL_SKILLS] : CORE_SKILLS;
 
 // All directories managed by this installer (runner + skills)
@@ -203,6 +204,76 @@ try {
     console.log('  /codex-security-review — security-focused review (OWASP Top 10 + CWE)');
     console.log('');
     console.log('Run: npx github:lploc94/codex_skill -full');
+  }
+
+  // --auto: inject review guidance into global ~/.claude/CLAUDE.md
+  if (autoMode) {
+    try {
+      const claudeDir = path.join(os.homedir(), '.claude');
+      const claudeMdPath = path.join(claudeDir, 'CLAUDE.md');
+      const START_MARKER = '<!-- codex-auto-review-start -->';
+      const END_MARKER = '<!-- codex-auto-review-end -->';
+
+      const guidanceBlock = [
+        START_MARKER,
+        '',
+        '## Codex Review — Auto-review Guidance',
+        '',
+        'When the user is working on code changes, **proactively suggest** the appropriate codex-review skill based on context:',
+        '',
+        '| Context | Suggested Skill | Trigger |',
+        '|---------|----------------|---------|',
+        '| Uncommitted changes (staged/unstaged) | `/codex-impl-review` | Before committing |',
+        '| Feature branch with commits | `/codex-pr-review` | Before creating/merging PR |',
+        '| Plan/design document created or modified | `/codex-plan-review` | After writing plan |',
+        '| Auth, SQL, crypto, secrets, user input code | `/codex-security-review` | When security-sensitive code detected |',
+        '| Large codebase (50+ files) needing review | `/codex-codebase-review` | On request for full review |',
+        '| Commit message drafted | `/codex-commit-review` | Before finalizing commit |',
+        '| Technical question or architecture debate | `/codex-think-about` | On design discussions |',
+        '',
+        '**Rules:**',
+        '- Always ask the user before running a review skill — never auto-run without confirmation',
+        '- Phrase as a suggestion: "Would you like me to run `/codex-impl-review` before committing?"',
+        '- Only suggest when context clearly matches — do not over-suggest',
+        '',
+        END_MARKER,
+      ].join('\n');
+
+      fs.mkdirSync(claudeDir, { recursive: true });
+
+      let existing = '';
+      try {
+        existing = fs.readFileSync(claudeMdPath, 'utf8');
+      } catch {
+        // File doesn't exist yet — start fresh
+      }
+
+      const startIdx = existing.indexOf(START_MARKER);
+      const endIdx = existing.indexOf(END_MARKER);
+
+      let updated;
+      if (startIdx !== -1 && endIdx !== -1) {
+        // Replace existing block (idempotent)
+        updated = existing.slice(0, startIdx) + guidanceBlock + existing.slice(endIdx + END_MARKER.length);
+      } else {
+        // Append to end
+        const separator = existing.length > 0 && !existing.endsWith('\n') ? '\n\n' : existing.length > 0 ? '\n' : '';
+        updated = existing + separator + guidanceBlock + '\n';
+      }
+
+      fs.writeFileSync(claudeMdPath, updated, 'utf8');
+      console.log('');
+      console.log('Auto-review guidance injected into ~/.claude/CLAUDE.md');
+    } catch (err) {
+      console.warn('');
+      console.warn(`Warning: could not inject auto-review guidance into ~/.claude/CLAUDE.md`);
+      console.warn(`  Reason: ${err.message}`);
+      console.warn('  Skills were installed successfully — only guidance injection failed.');
+    }
+  } else {
+    console.log('');
+    console.log('Optional: npx github:lploc94/codex_skill --auto');
+    console.log('  Injects review guidance into ~/.claude/CLAUDE.md');
   }
 } catch (err) {
   // Cleanup staging on any error
