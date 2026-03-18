@@ -24,7 +24,11 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Ask user** to choose review effort level: `low`, `medium`, `high`, or `xhigh` (default: `medium`). Ask input source: `draft` (user provides message text) or `last` (review last N commits, default 1). Set `EFFORT` and `MODE`.
+1. **Collect inputs**: Auto-detect context and announce defaults before asking anything.
+   - **mode**: Run `git diff --cached --quiet`; if exits 1 (has staged changes) → `draft`; else → `last`.
+   - **effort**: Default `medium` for commit-review (commits are typically small scope).
+   - Announce: "Detected: mode=`$MODE`, effort=`medium`. Proceeding — reply to override."
+   - Set `MODE` and `EFFORT`. For `draft` mode, ask for commit message text. For `last` mode, N=1 default.
 2. Run pre-flight checks (see `references/workflow.md` §1.5).
 3. Build Codex prompt + Claude analysis prompt from `references/prompts.md`, following the Placeholder Injection Guide. **Start Codex** (background) with `node "$RUNNER" start`.
 4. **Claude Independent Analysis** (BEFORE reading Codex output): Claude analyzes commit message(s) independently using format from `references/claude-analysis-template.md`. **INFORMATION BARRIER** — do NOT read `$STATE_DIR/review.md` until analysis is complete. See `references/workflow.md` Step 2.5.
