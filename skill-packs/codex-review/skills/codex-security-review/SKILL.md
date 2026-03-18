@@ -8,6 +8,9 @@ description: Security-focused code review using OWASP Top 10 and CWE patterns. D
 ## Purpose
 Use this skill to perform security-focused review of code changes, identifying vulnerabilities aligned with OWASP Top 10 2021 and common CWE patterns.
 
+## When to Use
+When changes touch auth, crypto, SQL queries, user input processing, file uploads, or external API calls. Use for security-focused pre-commit or pre-merge review. Complements `/codex-impl-review` — run both for sensitive code.
+
 ## Prerequisites
 - Working directory with source code
 - Optional: dependency manifest files (package.json, requirements.txt, go.mod) for supply chain analysis
@@ -31,12 +34,12 @@ RUNNER="{{RUNNER_PATH}}"
 8. Return final security assessment with risk summary.
 
 ### Effort Level Guide
-| Level    | Depth             | Best for                        |
-|----------|-------------------|---------------------------------|
-| `low`    | Common patterns   | Quick security sanity check     |
-| `medium` | OWASP Top 10      | Standard security review        |
-| `high`   | Deep analysis     | Pre-production security audit   |
-| `xhigh`  | Exhaustive        | Critical/regulated systems      |
+| Level    | Depth             | Best for                        | Typical time |
+|----------|-------------------|---------------------------------|--------------|
+| `low`    | Common patterns   | Quick security sanity check     | ~3-5 min     |
+| `medium` | OWASP Top 10      | Standard security review        | ~8-12 min    |
+| `high`   | Deep analysis     | Pre-production security audit   | ~15-20 min   |
+| `xhigh`  | Exhaustive        | Critical/regulated systems      | ~25-40 min   |
 
 ### Scope Guide
 | Scope          | Coverage                           | Best for                    |
@@ -45,59 +48,10 @@ RUNNER="{{RUNNER_PATH}}"
 | `branch`       | Branch diff vs base                | Pre-merge security review   |
 | `full`         | Entire codebase                    | Security audit              |
 
-## Security Categories Covered
-
-### OWASP Top 10 2021
-- **A01:2021** - Broken Access Control
-- **A02:2021** - Cryptographic Failures
-- **A03:2021** - Injection (SQL, Command, XSS, etc.)
-- **A04:2021** - Insecure Design
-- **A05:2021** - Security Misconfiguration
-- **A06:2021** - Vulnerable and Outdated Components
-- **A07:2021** - Identification and Authentication Failures
-- **A08:2021** - Software and Data Integrity Failures
-- **A09:2021** - Security Logging and Monitoring Failures
-- **A10:2021** - Server-Side Request Forgery (SSRF)
-
-### Additional Security Checks
-- Secrets/credentials in code
-- Hardcoded passwords and API keys
-- Insecure random number generation
-- Path traversal vulnerabilities
-- XML External Entity (XXE) attacks
-- Insecure deserialization
-- Missing security headers
-- CORS misconfigurations
-
-## Output Format
-
-Each security finding includes:
-- **CWE ID**: Common Weakness Enumeration identifier
-- **OWASP Category**: OWASP Top 10 2021 mapping
-- **Severity**: `critical`, `high`, `medium`, `low`
-- **Confidence**: `high`, `medium`, `low` (static analysis confidence)
-- **Attack Vector**: How the vulnerability could be exploited
-- **Suggested Fix**: Secure code example
-
-See `references/output-format.md` for complete specification.
-
-## Important Limitations
-
-**This is static analysis only:**
-- ✅ Can detect: Code patterns, hardcoded secrets, common vulnerabilities
-- ❌ Cannot detect: Runtime behavior, memory leaks (need profiling), zero-days
-- ⚠️ Heuristic: Findings are AI-generated suggestions, not guaranteed vulnerabilities
-
-**Always:**
-- Verify findings manually before treating as confirmed vulnerabilities
-- Run dynamic security testing (DAST) for runtime issues
-- Use dedicated tools for dependency scanning (Snyk, Dependabot)
-- Consult security experts for critical systems
-
 ## Required References
 - Detailed execution: `references/workflow.md`
 - Prompt templates: `references/prompts.md`
-- Output contract: `references/output-format.md`
+- Output contract (incl. Security Categories, Output Format, OWASP coverage): `references/output-format.md`
 
 ## Rules
 - Codex reviews only; it does not edit files
