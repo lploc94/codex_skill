@@ -8,6 +8,9 @@ description: Parallel independent review by both Claude (4 agents) and Codex, fo
 ## Purpose
 5 reviewers analyze the same codebase simultaneously: 4 Claude Code agents (via native Agent tool) + 1 Codex subprocess. Findings are merged, disagreements debated, consensus reported.
 
+## When to Use
+When you want independent dual-reviewer analysis. Produces higher-confidence findings than single-reviewer skills because findings are cross-validated between Claude agents and Codex before being reported.
+
 ## Prerequisites
 - **Working-tree mode** (default): working tree has staged or unstaged changes.
 - **Branch mode**: current branch differs from base branch.
@@ -38,12 +41,12 @@ RUNNER="{{RUNNER_PATH}}"
 7. **Cleanup**: always `node "$RUNNER" stop "$STATE_DIR"`.
 
 ### Effort Level Guide
-| Level    | Depth             | Best for                        |
-|----------|-------------------|---------------------------------|
-| `low`    | Surface check     | Quick sanity check              |
-| `medium` | Standard review   | Most day-to-day work            |
-| `high`   | Deep analysis     | Important features              |
-| `xhigh`  | Exhaustive        | Critical/security-sensitive     |
+| Level    | Depth             | Best for                        | Typical time |
+|----------|-------------------|---------------------------------|--------------|
+| `low`    | Surface check     | Quick sanity check              | ~5-10 min    |
+| `medium` | Standard review   | Most day-to-day work            | ~10-20 min   |
+| `high`   | Deep analysis     | Important features              | ~20-30 min   |
+| `xhigh`  | Exhaustive        | Critical/security-sensitive     | ~30-45 min   |
 
 ## Required References
 - Detailed execution + Agent tool JSON: `references/workflow.md`
