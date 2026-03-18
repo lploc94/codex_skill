@@ -1,5 +1,19 @@
 # Commit Review Workflow
 
+## Smart Default Detection
+
+**mode detection:**
+```bash
+git diff --cached --quiet
+if [ $? -ne 0 ]; then MODE="draft"; else MODE="last"; fi
+```
+
+If `draft`, ask user for the commit message text to review. If `last`, use N=1 default.
+
+Announce: `"Detected: mode=draft, effort=medium. Proceeding — reply to override."`
+
+---
+
 ## 1) Collect Inputs
 - **Input source** (`draft` or `last`).
 - **Draft mode**: user-provided commit message text. Run `git diff --cached` for staged changes context.
