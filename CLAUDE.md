@@ -176,7 +176,7 @@ skill-packs/codex-review/
 ## Verification
 
 1. `node bin/codex-skill.js` — installer chạy thành công
-2. `node skill-packs/codex-review/scripts/codex-runner.js version` — in version `11`
+2. `node skill-packs/codex-review/scripts/codex-runner.js version` — in version `14`
 3. `ls ~/.claude/skills/codex-review/` — chứa `scripts/`
 4. SKILL.md chứa absolute path, không search loop
 5. Invoke `/codex-plan-review`, `/codex-impl-review`, `/codex-think-about`, `/codex-commit-review`, `/codex-pr-review`, `/codex-parallel-review`, `/codex-codebase-review`, `/codex-security-review` trong Claude Code

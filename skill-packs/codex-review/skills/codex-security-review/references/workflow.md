@@ -526,7 +526,7 @@ echo "$SECURITY_PROMPT" | node "$RUNNER" start --working-dir "$PWD" --effort hig
 echo "Running security review on staged changes..."
 node "$RUNNER" start --working-dir "$PWD" --effort low
 
-if grep -q "VERDICT: REVISE" .codex-review/runs/*/review.md; then
+if grep -q "VERDICT: REVISE" "$SESSION_DIR/review.md"; then
   echo "❌ Security issues found. Commit blocked."
   echo "Run 'codex-security-review' for details."
   exit 1
@@ -552,7 +552,7 @@ jobs:
       - name: Run Security Review
         run: |
           node codex-runner.js start --working-dir . --effort high
-          cat .codex-review/runs/*/review.md >> $GITHUB_STEP_SUMMARY
+          cat "$SESSION_DIR/review.md" >> $GITHUB_STEP_SUMMARY
 ```
 
 ---
