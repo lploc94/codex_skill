@@ -1,5 +1,39 @@
 # Plan Review Workflow
 
+## Smart Default Detection
+
+**plan-path detection** (matches spec: `plan.md`, `PLAN.md`, `docs/*plan*` only):
+```bash
+# Check exact names at CWD root level
+PLAN_ROOT=$(ls plan.md PLAN.md 2>/dev/null | head -1)
+# Check docs/ subdirectory for any *plan* file
+PLAN_DOCS=$(find ./docs -maxdepth 2 -name "*plan*" 2>/dev/null | head -5)
+
+# Count total candidates
+ALL="$([ -n "$PLAN_ROOT" ] && echo "$PLAN_ROOT")
+$PLAN_DOCS"
+COUNT=$(echo "$ALL" | grep -v '^$' | wc -l)
+
+if [ "$COUNT" -eq 1 ]; then
+  PLAN_PATH=$(echo "$ALL" | grep -v '^$')
+elif [ "$COUNT" -gt 1 ]; then
+  # List candidates and ask user to choose
+  echo "Multiple plan files found: $ALL"
+  # Ask: "Which plan file should I use?"
+else
+  # Ask user for path
+  PLAN_PATH=""
+fi
+```
+
+> **Scope:** Only searches `plan.md`/`PLAN.md` at CWD root, and `docs/` subdirectory. Does NOT do deep recursive search to avoid false positives.
+
+**effort detection:** Default `high` for plan review.
+
+Announce: `"Detected: plan=docs/superpowers/plans/2026-03-18-example.md, effort=high. Proceeding — reply to override."`
+
+---
+
 ## 1) Gather Inputs
 - Plan file path (absolute). Must be a Markdown file.
 - User request text (or default: "Review this plan for quality and completeness").

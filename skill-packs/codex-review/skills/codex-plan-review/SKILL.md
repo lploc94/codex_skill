@@ -28,7 +28,11 @@ RUNNER="{{RUNNER_PATH}}"
 ```
 
 ## Workflow
-1. **Ask user** to choose debate effort level: `low`, `medium`, `high`, or `xhigh` (default: `high`). Set `EFFORT`.
+1. **Collect inputs**: Auto-detect context and announce defaults before asking anything.
+   - **plan-path**: Scan CWD for `plan.md`, `PLAN.md`, `docs/plan.md`. If single match found, use it. If multiple matches, list them and ask user to choose. If none, ask user for path.
+   - **effort**: Default `high` for plan review (plans typically cover significant scope).
+   - Announce detected plan path and effort. Proceeding — reply to override.
+   - Set `PLAN_PATH` and `EFFORT`. Block only if plan file cannot be found or resolved.
 2. Run pre-flight checks (see `references/workflow.md` §1.5).
 3. Build prompt from `references/prompts.md` (`Plan Review Prompt`), following the Placeholder Injection Guide.
 4. Start round 1 with `node "$RUNNER" start --working-dir "$PWD" --effort "$EFFORT"`.
