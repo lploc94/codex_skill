@@ -39,7 +39,7 @@ The codex-review skill pack has 9 skills with inconsistent UX across three dimen
 
 ### A: SKILL.md Standard Template
 
-All SKILL.md files will follow this section order exactly:
+All SKILL.md files will follow this section order exactly. **Documented exceptions:** `Scope Guide` subsection is optional (only included for skills with a scope parameter); `codex-codebase-review` uses a custom Effort table (see below). All other sections are required in all skills.
 
 ```
 ---
@@ -54,7 +54,7 @@ description: <1-line description>
 ## Prerequisites
 ## Runner
 ## Workflow
-  ### Effort Level Guide  (5-column table including Typical time)
+  ### Effort Level Guide  (4-column table including Typical time)
   ### Scope Guide         (only for skills with scope parameter)
 ## Required References
 ## Rules
@@ -68,9 +68,9 @@ description: <1-line description>
 | `codex-security-review/SKILL.md` | Add "Typical time" column; move inline "Output Format" and "Security Categories" sections into existing `references/output-format.md` (update, not create) |
 | `codex-codebase-review/SKILL.md` | Keep custom Effort table structure (Level/Discovery/Cross-cutting/Validation columns serve different purpose); add "Typical time" column only |
 | All SKILL.md | Standardize Workflow step 1 to: `**Collect inputs**: <list>` |
-| All SKILL.md | Add "When to Use" section (8 of 9 currently missing — content per skill below) |
+| All SKILL.md | Add "When to Use" section (8 of 9 currently missing — content per skill below; `codex-plan-review` already has this section and is not changed) |
 
-**"When to Use" content for each skill:**
+**"When to Use" content for the 8 skills missing this section:**
 
 | Skill | When to Use (1-2 sentences) |
 |-------|----------------------------|
@@ -83,7 +83,7 @@ description: <1-line description>
 | `codex-think-about` | When you want to debate a technical decision or design question before implementing. Not a code review skill. |
 | `codex-auto-review` | When you want zero-friction comprehensive review without deciding which skills to run. Auto-detects relevant skills. |
 
-**Effort table standard (5 columns):**
+**Effort table standard (4 columns):**
 
 | Level  | Depth           | Best for                    | Typical time |
 |--------|-----------------|-----------------------------|--------------|
@@ -148,6 +148,11 @@ All single-round review skills write persistent output to a standard location. `
 
 **Fix stale `review.json` reference:** The existing `codex-auto-review/references/workflow.md` Step 5 references `review.json` in the merge input format. Per v11 breaking changes, `review.json` is no longer generated. Update the merge input example to use `review.md` (LLM-parsed findings) instead.
 
+**Compatibility audit (Phase 2 prerequisite):** Before applying the path migration, search the entire repo for all references to `.codex-review/auto-runs` and `review.json`:
+- Run `grep -r "auto-runs" skill-packs/ .claude/` to find all stale path references
+- Run `grep -r "review\.json" skill-packs/` to find all stale format references
+- Update every reference found. If any reference is in `codex-runner.js`, escalate — `codex-runner.js` is out of scope for this plan.
+
 **Skills affected:**
 
 | Skill | Change |
@@ -172,7 +177,7 @@ Skills auto-detect context and proceed with defaults. User only responds to over
 
 | Input | Detection method | Fallback if undetectable |
 |-------|-----------------|--------------------------|
-| `scope` | `git status --short` → has changes = `working-tree`; `git rev-list @{u}..HEAD` → has commits = `branch` | Ask user |
+| `scope` | `git status --short` → has changes = `working-tree`; `git rev-list @{u}..HEAD` → has commits = `branch`; **if both true, prefer `working-tree`** (uncommitted changes take precedence) | Ask user |
 | `effort` | Count files in diff: <10 = `medium`, 10–50 = `high`, >50 = `xhigh` | Default `high` |
 | `base-branch` | Check `git remote show origin` default branch; fallback check for `main`/`master` refs | Ask user |
 | `mode` (commit-review) | `git diff --cached --quiet` fails = staged changes = `draft`; else `last` | Default `last` |
@@ -210,6 +215,7 @@ Skill: "Detected: scope=working-tree, effort=high (23 files changed)
 | `codex-parallel-review` | effort |
 | `codex-think-about` | (no setup inputs) |
 | `codex-codebase-review` | effort |
+| `codex-auto-review` | Uses `detect` command for auto-selection — no user-facing defaults banner needed; detection output already acts as the "defaults display" |
 
 ---
 
@@ -268,11 +274,12 @@ skill-packs/codex-review/skills/
 
 ## Success Criteria
 
-- [ ] All 9 SKILL.md files have identical section order
+- [ ] All 9 SKILL.md files have identical section order (with documented exceptions: optional `Scope Guide` subsection; custom Effort table for `codex-codebase-review`)
 - [ ] All 9 SKILL.md files have a "When to Use" section
-- [ ] All Effort tables have "Typical time" column (standard 5-col for 8 skills; custom format for codebase-review with Typical time added)
-- [ ] 5 review skills (impl, pr, plan, commit, security) write `review.md` + `meta.json` to `.codex-review/sessions/<skill>-<ts>/`
-- [ ] `codex-auto-review` writes to `.codex-review/sessions/codex-auto-review-<ts>/` (updated from `auto-runs/`)
+- [ ] All Effort tables have "Typical time" column (standard 4-col for 8 skills; custom format for codebase-review with Typical time column added)
+- [ ] 5 review skills (impl, pr, plan, commit, security) write `review.md` + `meta.json` to `.codex-review/sessions/<skill-name>-<timestamp>-<pid>/`
+- [ ] `codex-auto-review` writes to `.codex-review/sessions/codex-auto-review-<timestamp>-<pid>/` (updated from `auto-runs/`)
+- [ ] Compatibility audit complete: no remaining references to `.codex-review/auto-runs` or `review.json` in skill files
 - [ ] Stale `review.json` reference removed from `codex-auto-review/references/workflow.md`
-- [ ] All review skills display detected defaults before asking any question
+- [ ] All review skills display detected defaults before asking any question (`codex-auto-review` exempt — uses `detect` output as its defaults display)
 - [ ] A user invoking any two skills sees consistent interaction pattern
