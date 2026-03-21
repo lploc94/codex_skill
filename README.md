@@ -1,4 +1,8 @@
-# codex-skill
+<h1 align="center"><b>Codex Review Skill</b></h1>
+
+<p align="center">
+  <img src="https://i.postimg.cc/vZY5Y5gC/Codex-skill.png" alt="Codex Skill" />
+</p>
 
 Single-command installer for the **codex-review** skill pack for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
