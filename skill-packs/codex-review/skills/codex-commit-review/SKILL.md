@@ -8,6 +8,9 @@ description: Peer debate between Claude Code and Codex on commit message quality
 ## Purpose
 Use this skill to debate commit message quality before or after committing. Claude and Codex are equal analytical peers — Claude orchestrates the debate loop and final synthesis. No commit messages are modified.
 
+## When to Use
+After staging changes (draft mode) or after committing (last mode). Use to verify commit message quality and alignment with the actual diff before push.
+
 ## Prerequisites
 - **Draft mode**: user provides draft commit message text. Staged changes available for alignment check.
 - **Last mode**: recent commits exist (`git log -n N`). Repository has commit history.

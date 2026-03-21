@@ -1,5 +1,54 @@
 # Security Review Output Format
 
+## Security Categories Covered
+
+### OWASP Top 10 2021
+- **A01:2021** - Broken Access Control
+- **A02:2021** - Cryptographic Failures
+- **A03:2021** - Injection (SQL, Command, XSS, etc.)
+- **A04:2021** - Insecure Design
+- **A05:2021** - Security Misconfiguration
+- **A06:2021** - Vulnerable and Outdated Components
+- **A07:2021** - Identification and Authentication Failures
+- **A08:2021** - Software and Data Integrity Failures
+- **A09:2021** - Security Logging and Monitoring Failures
+- **A10:2021** - Server-Side Request Forgery (SSRF)
+
+### Additional Security Checks
+- Secrets/credentials in code
+- Hardcoded passwords and API keys
+- Insecure random number generation
+- Path traversal vulnerabilities
+- XML External Entity (XXE) attacks
+- Insecure deserialization
+- Missing security headers
+- CORS misconfigurations
+
+## Output Format
+
+Each security finding includes:
+- **CWE ID**: Common Weakness Enumeration identifier
+- **OWASP Category**: OWASP Top 10 2021 mapping
+- **Severity**: `critical`, `high`, `medium`, `low`
+- **Confidence**: `high`, `medium`, `low` (static analysis confidence)
+- **Attack Vector**: How the vulnerability could be exploited
+- **Suggested Fix**: Secure code example
+
+## Important Limitations
+
+**This is static analysis only:**
+- ✅ Can detect: Code patterns, hardcoded secrets, common vulnerabilities
+- ❌ Cannot detect: Runtime behavior, memory leaks (need profiling), zero-days
+- ⚠️ Heuristic: Findings are AI-generated suggestions, not guaranteed vulnerabilities
+
+**Always:**
+- Verify findings manually before treating as confirmed vulnerabilities
+- Run dynamic security testing (DAST) for runtime issues
+- Use dedicated tools for dependency scanning (Snyk, Dependabot)
+- Consult security experts for critical systems
+
+---
+
 ## Overview
 
 Security review findings follow the standard ISSUE-{N} format with additional security-specific fields:

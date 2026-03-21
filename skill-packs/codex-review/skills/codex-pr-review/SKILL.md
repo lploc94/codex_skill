@@ -8,6 +8,9 @@ description: Peer debate between Claude Code and Codex on PR quality and merge r
 ## Purpose
 Use this skill to run peer debate on branch changes before merge — covering code quality, PR description, commit hygiene, scope, and merge readiness. Claude and Codex are equal analytical peers — Claude orchestrates the debate loop and final synthesis. No code is modified.
 
+## When to Use
+Before opening or merging a pull request. Covers branch diff, commit history, and PR description together in one pass — more thorough than `/codex-impl-review` for pre-merge scenarios.
+
 ## Prerequisites
 - Current branch differs from base branch (has commits not in base).
 - `git diff <base>...HEAD` produces output.
@@ -33,11 +36,11 @@ RUNNER="{{RUNNER_PATH}}"
 
 ### Effort Level Guide
 | Level    | Depth             | Best for                        | Typical time |
-|----------|-------------------|---------------------------------|-------------|
-| `low`    | Surface check     | Quick sanity check              | ~1-2 min |
-| `medium` | Standard review   | Most day-to-day work            | ~3-5 min |
-| `high`   | Deep analysis     | Important features              | ~5-10 min |
-| `xhigh`  | Exhaustive        | Critical/security-sensitive     | ~10-15 min |
+|----------|-------------------|---------------------------------|--------------|
+| `low`    | Surface check     | Quick sanity check              | ~3-5 min     |
+| `medium` | Standard review   | Most day-to-day work            | ~8-12 min    |
+| `high`   | Deep analysis     | Important features              | ~15-20 min   |
+| `xhigh`  | Exhaustive        | Critical/security-sensitive     | ~25-40 min   |
 
 ## Required References
 - Detailed execution: `references/workflow.md`

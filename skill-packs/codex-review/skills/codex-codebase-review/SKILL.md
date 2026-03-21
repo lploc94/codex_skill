@@ -8,6 +8,9 @@ description: Review entire codebases (50-500+ files) by chunking into modules, r
 ## Purpose
 Review large codebases (50-500+ files) that exceed single-session context limits. Splits codebase into module-based chunks, reviews each in an independent Codex session, then Claude synthesizes cross-cutting findings across modules.
 
+## When to Use
+For full codebase audit (50–500+ files). Not for incremental change review — use `/codex-impl-review` for that. Run periodically for architecture/quality sweeps or before major releases.
+
 ## Prerequisites
 - Source files in working directory.
 - `codex` CLI is installed and authenticated.
@@ -30,12 +33,12 @@ RUNNER="{{RUNNER_PATH}}"
 8. **Cleanup**: stop ALL tracked STATE_DIRs — always runs regardless of outcome.
 
 ### Effort Level Guide
-| Level    | Discovery        | Cross-cutting    | Validation   |
-|----------|------------------|------------------|--------------|
-| `low`    | Auto-detect only | Basic (2 cats)   | Skip         |
-| `medium` | Auto + confirm   | Standard (3 cats)| Skip         |
-| `high`   | Full + confirm   | Full (5 cats)    | 1 round      |
-| `xhigh`  | Full + suggest   | Full + arch      | 2 rounds     |
+| Level    | Discovery        | Cross-cutting    | Validation   | Typical time        |
+|----------|------------------|------------------|--------------|---------------------|
+| `low`    | Auto-detect only | Basic (2 cats)   | Skip         | ~10-20 min/chunk    |
+| `medium` | Auto + confirm   | Standard (3 cats)| Skip         | ~15-30 min/chunk    |
+| `high`   | Full + confirm   | Full (5 cats)    | 1 round      | ~20-40 min/chunk    |
+| `xhigh`  | Full + suggest   | Full + arch      | 2 rounds     | ~30-60 min/chunk    |
 
 ## Required References
 - Detailed orchestration: `references/workflow.md`

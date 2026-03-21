@@ -8,6 +8,9 @@ description: Have Codex CLI review uncommitted code changes or branch diff again
 ## Purpose
 Use this skill to run adversarial review on uncommitted changes before commit, or on branch changes before merge.
 
+## When to Use
+After writing code, before committing. Use for uncommitted working-tree changes or comparing a branch against base. For security-sensitive code, run `/codex-security-review` alongside this.
+
 ## Prerequisites
 - **Working-tree mode** (default): working tree has staged or unstaged changes.
 - **Branch mode**: current branch differs from base branch (has commits not in base).

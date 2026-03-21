@@ -8,6 +8,9 @@ description: Peer debate between Claude Code and Codex on any technical question
 ## Purpose
 Use this skill for peer reasoning, not code review. Claude and Codex are equal analytical peers; Claude orchestrates the debate loop and final synthesis.
 
+## When to Use
+When you want to debate a technical decision or design question before implementing. Use this for architecture choices, technology comparisons, and reasoning through tradeoffs — not for code review.
+
 ## Prerequisites
 - A clear question or decision topic from the user.
 - `codex` CLI installed and authenticated.
@@ -32,12 +35,12 @@ RUNNER="{{RUNNER_PATH}}"
 7. Present user-facing synthesis with agreements, disagreements, cited sources, and confidence.
 
 ### Effort Level Guide
-| Level    | Depth             | Best for                        |
-|----------|-------------------|---------------------------------|
-| `low`    | Surface check     | Quick sanity check              |
-| `medium` | Standard review   | Most day-to-day work            |
-| `high`   | Deep analysis     | Important features              |
-| `xhigh`  | Exhaustive        | Critical/security-sensitive     |
+| Level    | Depth             | Best for                        | Typical time |
+|----------|-------------------|---------------------------------|--------------|
+| `low`    | Surface check     | Quick sanity check              | ~2-3 min     |
+| `medium` | Standard review   | Most day-to-day work            | ~5-8 min     |
+| `high`   | Deep analysis     | Important features              | ~10-15 min   |
+| `xhigh`  | Exhaustive        | Critical/security-sensitive     | ~20-30 min   |
 
 ## Required References
 - Execution loop: `references/workflow.md`
