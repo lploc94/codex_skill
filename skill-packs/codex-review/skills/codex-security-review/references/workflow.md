@@ -342,15 +342,15 @@ After the final round completes (or after Round 1 for single-round skills), crea
 SESSION_DIR=".codex-review/sessions/codex-security-review-$(date +%s)-$$"
 mkdir -p "$SESSION_DIR"
 cp "$STATE_DIR/review.md" "$SESSION_DIR/review.md"
-cat > "$SESSION_DIR/meta.json" << 'METAEOF'
+cat > "$SESSION_DIR/meta.json" << METAEOF
 {
   "skill": "codex-security-review",
   "version": 14,
   "effort": "$EFFORT",
   "scope": "$SCOPE",
-  "rounds": $ROUND_COUNT,
+  "rounds": ${ROUND_COUNT:-0},
   "verdict": "$FINAL_VERDICT",
-  "timing": { "total_seconds": $ELAPSED_SECONDS },
+  "timing": { "total_seconds": ${ELAPSED_SECONDS:-0} },
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 METAEOF
@@ -526,7 +526,7 @@ echo "$SECURITY_PROMPT" | node "$RUNNER" start --working-dir "$PWD" --effort hig
 echo "Running security review on staged changes..."
 node "$RUNNER" start --working-dir "$PWD" --effort low
 
-if grep -q "VERDICT: REVISE" "$SESSION_DIR/review.md"; then
+if grep -q "VERDICT: REVISE" .codex-review/runs/*/review.md; then
   echo "❌ Security issues found. Commit blocked."
   echo "Run 'codex-security-review' for details."
   exit 1
@@ -552,7 +552,7 @@ jobs:
       - name: Run Security Review
         run: |
           node codex-runner.js start --working-dir . --effort high
-          cat "$SESSION_DIR/review.md" >> $GITHUB_STEP_SUMMARY
+          cat .codex-review/runs/*/review.md >> $GITHUB_STEP_SUMMARY
 ```
 
 ---

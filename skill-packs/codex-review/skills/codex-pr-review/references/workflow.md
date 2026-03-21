@@ -298,15 +298,15 @@ After the final round completes (or after Round 1 for single-round skills), crea
 SESSION_DIR=".codex-review/sessions/codex-pr-review-$(date +%s)-$$"
 mkdir -p "$SESSION_DIR"
 cp "$STATE_DIR/review.md" "$SESSION_DIR/review.md"
-cat > "$SESSION_DIR/meta.json" << 'METAEOF'
+cat > "$SESSION_DIR/meta.json" << METAEOF
 {
   "skill": "codex-pr-review",
   "version": 14,
   "effort": "$EFFORT",
   "scope": "$SCOPE",
-  "rounds": $ROUND_COUNT,
+  "rounds": ${ROUND_COUNT:-0},
   "verdict": "$FINAL_VERDICT",
-  "timing": { "total_seconds": $ELAPSED_SECONDS },
+  "timing": { "total_seconds": ${ELAPSED_SECONDS:-0} },
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 METAEOF
