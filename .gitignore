@@ -14,3 +14,10 @@ node_modules/
 # macOS
 .DS_Store
 .gitnexus
+
+# Working documents (session notes, reports, plans)
+SESSION_SUMMARY.md
+PROGRESS_REPORT.md
+FINAL_REPORT.md
+IMPROVEMENT_PLAN.md
+docs/superpowers/
