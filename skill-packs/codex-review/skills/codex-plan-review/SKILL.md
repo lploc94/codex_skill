@@ -29,7 +29,7 @@ RUNNER="{{RUNNER_PATH}}"
 
 ## Workflow
 1. **Collect inputs**: Auto-detect context and announce defaults before asking anything.
-   - **plan-path**: Scan CWD for `plan.md`, `PLAN.md`, `docs/plan.md`. If single match found, use it. If multiple matches, list them and ask user to choose. If none, ask user for path.
+   - **plan-path**: Scan CWD for `plan.md`, `PLAN.md`; also search `docs/` up to 3 levels for `*plan*.md`. If single match → use it. If multiple → list and ask user. If none → ask user for path.
    - **effort**: Default `high` for plan review (plans typically cover significant scope).
    - Announce detected plan path and effort. Proceeding — reply to override.
    - Set `PLAN_PATH` and `EFFORT`. Block only if plan file cannot be found or resolved.

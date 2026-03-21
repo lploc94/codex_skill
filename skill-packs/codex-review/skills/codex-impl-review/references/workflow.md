@@ -6,25 +6,29 @@
 
 Before asking the user anything, auto-detect and announce:
 
-**effort detection:**
+**scope detection (FIRST):**
 ```bash
-FILES_CHANGED=$(git diff --name-only 2>/dev/null | wc -l)
+HAS_WORKING_CHANGES=$(git status --short 2>/dev/null | grep -v '^??' | wc -l)
+HAS_BRANCH_COMMITS=$(git rev-list @{u}..HEAD 2>/dev/null | wc -l)
+if [ "$HAS_WORKING_CHANGES" -gt 0 ]; then SCOPE="working-tree"
+elif [ "$HAS_BRANCH_COMMITS" -gt 0 ]; then SCOPE="branch"
+else SCOPE=""  # ask user
+fi
+```
+
+**effort detection (AFTER scope — adapts to detected scope):**
+```bash
+if [ "$SCOPE" = "branch" ]; then
+  FILES_CHANGED=$(git diff --name-only @{u}..HEAD 2>/dev/null | wc -l)
+else
+  FILES_CHANGED=$(git diff --name-only 2>/dev/null | wc -l)
+fi
 if [ "$FILES_CHANGED" -lt 10 ]; then EFFORT="medium"
 elif [ "$FILES_CHANGED" -lt 50 ]; then EFFORT="high"
 else EFFORT="xhigh"
 fi
 # Fallback: default high
 EFFORT=${EFFORT:-high}
-```
-
-**scope detection:**
-```bash
-HAS_WORKING_CHANGES=$(git status --short 2>/dev/null | wc -l)
-HAS_BRANCH_COMMITS=$(git rev-list @{u}..HEAD 2>/dev/null | wc -l)
-if [ "$HAS_WORKING_CHANGES" -gt 0 ]; then SCOPE="working-tree"
-elif [ "$HAS_BRANCH_COMMITS" -gt 0 ]; then SCOPE="branch"
-else SCOPE=""  # ask user
-fi
 ```
 
 Announce: `"Detected: scope=working-tree, effort=high (23 files changed). Proceeding — reply to override."`

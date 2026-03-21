@@ -25,8 +25,8 @@ RUNNER="{{RUNNER_PATH}}"
 
 ## Workflow
 1. **Collect inputs**: Auto-detect context and announce defaults before asking anything.
-   - **effort**: Run `git diff --name-only | wc -l` — result <10 → `medium`, 10–50 → `high`, >50 → `xhigh`; default `high` if undetectable.
-   - **scope**: Run `git status --short` — non-empty output → `working-tree`. Else run `git rev-list @{u}..HEAD` — non-empty → `branch`. If both conditions true, use `working-tree`. If neither, ask user.
+   - **scope** (detected first): Run `git status --short | grep -v '^??'` — non-empty output → `working-tree`. Else run `git rev-list @{u}..HEAD` — non-empty → `branch`. If both conditions true, use `working-tree`. If neither, ask user.
+   - **effort** (adapts to detected scope): If scope=`branch`, count `git diff --name-only @{u}..HEAD`; else count `git diff --name-only`. Result <10 → `medium`, 10–50 → `high`, >50 → `xhigh`; default `high` if undetectable.
    - Announce: "Detected: scope=`$SCOPE`, effort=`$EFFORT` (N files changed). Proceeding — reply to override scope, effort, or both."
    - Set `SCOPE` and `EFFORT`. Only block for inputs that remain undetectable.
 2. Run pre-flight checks (see `references/workflow.md` §1.5).

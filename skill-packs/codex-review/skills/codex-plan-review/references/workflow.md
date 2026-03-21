@@ -17,9 +17,9 @@ COUNT=$(echo "$ALL" | grep -v '^$' | wc -l)
 if [ "$COUNT" -eq 1 ]; then
   PLAN_PATH=$(echo "$ALL" | grep -v '^$')
 elif [ "$COUNT" -gt 1 ]; then
-  # List candidates and ask user to choose
   echo "Multiple plan files found: $ALL"
-  # Ask: "Which plan file should I use?"
+  # Ask user: "Which plan file should I use?"
+  PLAN_PATH="<user-chosen>"  # ← set after user selects
 else
   # Ask user for path
   PLAN_PATH=""

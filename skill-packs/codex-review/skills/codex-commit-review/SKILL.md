@@ -25,7 +25,7 @@ RUNNER="{{RUNNER_PATH}}"
 
 ## Workflow
 1. **Collect inputs**: Auto-detect context and announce defaults before asking anything.
-   - **mode**: Run `git diff --cached --quiet`; if exits 1 (has staged changes) → `draft`; else → `last`.
+   - **mode**: Run `git diff --cached --quiet`; exit 1 → `draft` (staged changes); exit 0 → `last` (no staged); other → ask user.
    - **effort**: Default `medium` for commit-review (commits are typically small scope).
    - Announce: "Detected: mode=`$MODE`, effort=`medium`. Proceeding — reply to override."
    - Set `MODE` and `EFFORT`. For `draft` mode, ask for commit message text. For `last` mode, N=1 default.
