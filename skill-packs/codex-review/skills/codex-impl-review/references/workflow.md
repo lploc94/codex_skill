@@ -85,6 +85,27 @@ START_OUTPUT=$(printf '%s' "$PROMPT" | node "$RUNNER" start "$SESSION_DIR" --eff
 **Validate init output:** Verify `INIT_OUTPUT` starts with `CODEX_SESSION:`. If not, report error.
 **Validate start output:** Verify `START_OUTPUT` starts with `CODEX_STARTED:`. If not, report error.
 
+## 2.5) Information Barrier — Claude Independent Code Analysis
+
+MUST complete before polling Codex output.
+Codex is running in background — use this time productively.
+
+**working-tree mode**: run `git diff` and `git diff --cached` yourself
+   (or reuse the diff already collected in Step 1 — working tree hasn't changed)
+**branch mode**: run `git diff $BASE_BRANCH...HEAD` yourself
+   (or reuse the diff already collected in Step 1)
+
+Form an independent FINDING-{N} list in working context (do NOT write to a file):
+- Bugs and edge cases
+- Security issues
+- Performance concerns
+- Maintainability problems
+
+Use the same FINDING-{N} format as `output-format.md` ISSUE-{N} (same field names).
+Do NOT read `$SESSION_DIR/review.md` until this analysis is complete.
+
+INFORMATION BARRIER ends after Round 1 poll completes.
+
 ## 3) Poll
 
 ```bash
@@ -116,7 +137,29 @@ Continue while status is `running`.
 Stop on `completed|failed|timeout|stalled`.
 
 ## 4) Apply/Rebut
-- Parse `ISSUE-{N}` blocks.
+
+### 4a) Parse Codex Output
+Read all `ISSUE-{N}` blocks from `$SESSION_DIR/review.md`.
+
+### 4b) Build FINDING↔ISSUE Mapping Table
+Map Claude's FINDING-{N} (from Step 2.5) against Codex's ISSUE-{N}:
+
+| Claude FINDING-{N} | Codex ISSUE-{M} | Classification |
+|--------------------|-----------------|----------------|
+| ...                | ...             | ...            |
+
+Classification options:
+- **Genuine Agreement**: FINDING-{N} and ISSUE-{M} identify the same code problem
+- **Codex-only**: ISSUE-{M} has no matching Claude FINDING
+- **Claude-only**: FINDING-{N} has no matching Codex ISSUE
+- **Genuine Disagreement**: Conflicting assessments of the same code
+
+### 4c) Apply/Rebut using cross-analysis context
+For each ISSUE-{N}:
+- If genuine agreement or Codex-only → apply fix to code
+- If Claude-only → include in final report as Claude finding
+- If genuine disagreement → write rebuttal with concrete proof (paths, tests, behavior)
+
 - For valid issues: edit code and record fix evidence.
 - For invalid issues: write rebuttal with concrete proof (paths, tests, behavior).
 - **Branch mode only**: after applying fixes, commit them (`git add` + `git commit`) before resuming. Codex reads `git diff <base>...HEAD` which only includes committed changes — uncommitted fixes will be invisible to Codex and cause repeated issues.
@@ -143,7 +186,7 @@ START_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" resume "$SESSION_
 Then **go back to step 3 (Poll).** After poll completes, repeat step 4 (Apply/Rebut) and check completion criteria below. If not met, resume again (step 5). Continue this loop until a completion criterion is reached.
 
 ## 6) Completion Criteria
-- Codex returns `VERDICT: APPROVE`.
+- Codex returns `VERDICT: CONSENSUS`.
 - Or user accepts a documented stalemate.
 - **Hard cap: 5 rounds.** At cap, force final synthesis with unresolved issues listed as residual risks.
 
@@ -166,7 +209,7 @@ At stalemate:
 | Metric | Value |
 |--------|-------|
 | Rounds | {N} |
-| Verdict | {APPROVE/REVISE/STALEMATE} |
+| Verdict | {CONSENSUS/CONTINUE/STALEMATE} |
 | Issues Found | {total} |
 | Issues Fixed | {fixed_count} |
 | Issues Disputed | {disputed_count} |

@@ -69,6 +69,25 @@ START_OUTPUT=$(printf '%s' "$PROMPT" | node "$RUNNER" start "$SESSION_DIR" --eff
 **Validate init output:** Verify `INIT_OUTPUT` starts with `CODEX_SESSION:`. If not, report error.
 **Validate start output:** Verify `START_OUTPUT` starts with `CODEX_STARTED:`. If not, report error.
 
+## 2.5) Information Barrier — Claude Independent Plan Analysis
+
+MUST complete before polling Codex output.
+Codex is running in background — use this time productively.
+
+Read the plan file at `$PLAN_PATH` directly.
+Do NOT read `$SESSION_DIR/review.md` until this analysis is complete.
+
+Form an independent FINDING-{N} list in working context (do NOT write to a file):
+- Correctness issues (steps that are wrong or will fail)
+- Architecture concerns (structural problems with the approach)
+- Sequencing/dependency problems (steps out of order, missing prerequisites)
+- Scope gaps or risks (missing requirements, underestimated complexity)
+
+Use the same FINDING-{N} format as `output-format.md` ISSUE-{N} (same field names).
+
+INFORMATION BARRIER ends after Round 1 poll completes.
+From Round 2 onwards, the barrier no longer applies.
+
 ## 3) Poll
 
 ```bash
@@ -99,18 +118,44 @@ After each poll, report **specific activities** to the user using the `SUMMARY:`
 Continue while status is `running`.
 Stop on `completed|failed|timeout|stalled`.
 
-## 4) Parse Review
-- Read `THREAD_ID:` and `review.md` from runner output/state directory.
-- Extract `ISSUE-{N}` blocks.
-- Apply accepted fixes to plan.
-- **Save the updated plan file before resuming.** Codex round 2+ will re-read it from the plan path.
-- Build rebuttal packet for disputed items.
-- Record the set of open (unresolved) ISSUE-{N} IDs for stalemate tracking.
+## 4) Cross-Analysis
 
-After parsing each round's review, append round summary to `$SESSION_DIR/rounds.json`:
-- Read existing rounds.json or start with empty array `[]`
-- Append: `{ "round": N, "elapsed_seconds": ..., "verdict": "...", "issues_found": ..., "issues_fixed": ..., "issues_disputed": ... }`
-- Write back to `$SESSION_DIR/rounds.json`
+After Round 1 poll completes and `$SESSION_DIR/review.md` is available:
+
+### 4a) Parse Codex Output
+Read all `ISSUE-{N}` blocks from `$SESSION_DIR/review.md`.
+
+### 4b) Build FINDING↔ISSUE Mapping Table
+Map Claude's FINDING-{N} (from Step 2.5) against Codex's ISSUE-{N}:
+
+| Claude FINDING-{N} | Codex ISSUE-{M} | Classification |
+|--------------------|-----------------|----------------|
+| ...                | ...             | ...            |
+
+Classification options:
+- **Genuine Agreement**: FINDING-{N} and ISSUE-{M} identify the same plan problem
+- **Codex-only**: ISSUE-{M} has no matching Claude FINDING
+- **Claude-only**: FINDING-{N} has no matching Codex ISSUE
+- **Genuine Disagreement**: Conflicting assessments of the same plan section
+
+### 4c) Determine Response for Each ISSUE
+For each ISSUE-{N}:
+- Genuine agreement or Codex-only → apply fix to the plan file
+- Claude-only → include in final report as Claude finding
+- Genuine disagreement → write rebuttal with concrete reasoning
+
+### 4d) Apply Fixes
+Apply accepted fixes to the plan file at `$PLAN_PATH`.
+Save the updated plan file before resuming.
+**Critical**: Codex Round 2+ re-reads the plan from `$PLAN_PATH` — unsaved changes are invisible to Codex.
+
+### 4e) Record Round Summary
+Append to `$SESSION_DIR/rounds.json`:
+```json
+{ "round": N, "elapsed_seconds": ..., "verdict": "...", "issues_found": ..., "issues_fixed": ..., "issues_disputed": ... }
+```
+
+Proceed to Step 5 (resume) or Step 7 (final output) based on VERDICT.
 
 ## 5) Resume (Round 2+)
 
@@ -123,7 +168,7 @@ START_OUTPUT=$(printf '%s' "$REBUTTAL_PROMPT" | node "$RUNNER" resume "$SESSION_
 Then **go back to step 3 (Poll).** After poll completes, repeat step 4 (Parse) and check stop conditions below. If not met, resume again (step 5). Continue this loop until a stop condition is reached.
 
 ## 6) Stop Conditions
-- `VERDICT: APPROVE`.
+- `VERDICT: CONSENSUS`.
 - Stalemate detected (see below).
 - User stops debate.
 - **Hard cap: 5 rounds.** At cap, force final synthesis with unresolved issues listed as residual risks.
@@ -147,7 +192,7 @@ At stalemate:
 | Metric | Value |
 |--------|-------|
 | Rounds | {N} |
-| Verdict | {APPROVE/REVISE/STALEMATE} |
+| Verdict | {CONSENSUS/CONTINUE/STALEMATE} |
 | Issues Found | {total} |
 | Issues Fixed | {fixed_count} |
 | Issues Disputed | {disputed_count} |

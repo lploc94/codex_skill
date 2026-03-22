@@ -327,7 +327,7 @@ cat > "$SESSION_DIR/meta.json" << METAEOF
   "skill": "codex-pr-review",
   "version": 15,
   "effort": "$EFFORT",
-  "scope": "$SCOPE",
+  "scope": "$BASE_BRANCH",
   "rounds": ${ROUND_COUNT:-0},
   "verdict": "$FINAL_VERDICT",
   "timing": { "total_seconds": ${ELAPSED_SECONDS:-0} },
@@ -337,7 +337,7 @@ METAEOF
 echo "Session saved to: $SESSION_DIR"
 ```
 
-Replace `$SCOPE` with the base branch used (e.g. `main`). Report `$SESSION_DIR` path to the user in the final summary.
+The `$BASE_BRANCH` variable contains the base branch used (e.g. `main`). Report `$SESSION_DIR` path to the user in the final summary.
 
 ## Error Handling
 

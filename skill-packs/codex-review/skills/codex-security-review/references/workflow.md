@@ -45,20 +45,28 @@ This document describes the execution workflow for security-focused code review 
 
 ## Phase 1: Setup and Initialization
 
-### Step 1: Gather User Input
+### Step 1: Detect Scope and Base Branch
 
-Ask the user for:
-1. **Effort level**: `low`, `medium`, `high`, or `xhigh` (default: `high`)
-2. **Review scope**: `working-tree`, `branch`, or `full` (default: `working-tree`)
-3. **Base branch** (if scope is `branch`): Discover and validate base branch
+**Auto-detect scope**:
+- Run `git status --short` — non-empty output → `working-tree`
+- Else run `git rev-list @{u}..HEAD` — non-empty → `branch`
+- If both conditions true, use `working-tree`
+- If neither, ask user or default to `full`
 
-Use `AskUserQuestion` to collect these inputs in a single prompt.
+**For branch mode, determine base branch**:
+- Check if upstream is set: `git rev-parse --abbrev-ref @{u}` → use upstream's branch
+- Else try `main`: `git rev-parse --verify main`
+- Else try `master`: `git rev-parse --verify master`
+- Else use remote HEAD: `git symbolic-ref refs/remotes/origin/HEAD`
+- If all fail, ask user for base branch name
+
+Store as `$BASE_BRANCH` for branch mode.
 
 ### Step 2: Validate Prerequisites
 
 - Verify inside a git repository: `git rev-parse --show-toplevel`. If not a git repo, abort (unless scope=full on non-git project).
 - **Working-tree mode**: verify changes exist: `git diff --quiet && git diff --cached --quiet` must FAIL.
-- **Branch mode**: verify base branch exists: `git rev-parse --verify <base-branch>`. Verify diff exists: `git diff <base>...HEAD --quiet` must FAIL.
+- **Branch mode**: verify base branch exists: `git rev-parse --verify $BASE_BRANCH`. Verify diff exists: `git diff $BASE_BRANCH...HEAD --quiet` must FAIL.
 - **Full mode**: no additional git checks needed (scans entire codebase).
 
 ### Step 3: Build Security Review Prompt
@@ -73,6 +81,30 @@ Include:
 - CWE pattern detection
 - Secrets scanning instructions
 - Effort-appropriate depth
+
+### Step 1.8: Assemble Prompt
+
+Build `$PROMPT` using multi-step placeholder replacement.
+DO NOT use a single sed pipeline — `output-format.md` may contain `&`, `\`, `/` characters
+that corrupt sed replacements. Use `printf '%s'` piping.
+
+a) Extract only the Round 1 prompt section from `references/prompts.md`:
+   - Start from `## Security Review Prompt (Round 1)`
+   - End before `## Security Review Prompt - Working Tree Mode`
+   - Do NOT include Round 2+ prompt sections
+b) Replace `{WORKING_DIR}` with current working directory
+c) Replace `{SCOPE}` with detected `$SCOPE` value
+d) Replace `{EFFORT}` with detected `$EFFORT` value
+e) Replace `{SCOPE_SPECIFIC_INSTRUCTIONS}` with the scope-specific block from prompts.md
+   matching the detected `$SCOPE` (working-tree / branch / full)
+f) Replace `{OUTPUT_FORMAT}` by reading `references/output-format.md` in full
+   using: `printf '%s' "$(cat references/output-format.md)"`
+g) Replace `{BASE_BRANCH}` with `$BASE_BRANCH` (branch mode only)
+h) Replace any remaining placeholders
+
+Store result as `$PROMPT`.
+
+Verify: `$PROMPT` must contain no prematurely-closed triple-backtick fences.
 
 ---
 
@@ -98,6 +130,21 @@ START_OUTPUT=$(printf '%s' "$PROMPT" | node "$RUNNER" start "$SESSION_DIR" --eff
 **Validate init output:** Verify `INIT_OUTPUT` starts with `CODEX_SESSION:`. If not, report error.
 **Validate start output:** Verify `START_OUTPUT` starts with `CODEX_STARTED:`. If not, report error.
 
+### Phase 2, Step 2.5: Information Barrier — Claude Independent Security Analysis
+
+MUST complete before polling Codex output.
+Codex is running in background (typically 90-180s) — use this time.
+
+Using `references/claude-analysis-template.md`:
+- Read all files in scope directly (do NOT read `$SESSION_DIR/review.md`)
+- Identify top attack surfaces
+- Form an independent FINDING-{N} list using OWASP categories
+- Note high-confidence vs uncertain findings
+
+Keep analysis in working context. Do NOT write a file.
+INFORMATION BARRIER ends after Round 1 poll completes.
+From Round 2 onwards, the barrier no longer applies.
+
 ### Step 2: Poll for Progress
 
 Use adaptive polling intervals:
@@ -117,6 +164,23 @@ node "$RUNNER" poll "$SESSION_DIR"
 ### Step 3: Parse Security Findings
 
 When poll returns `POLL:completed`:
+
+### Cross-Analysis: Build FINDING↔ISSUE Mapping Table
+
+Map Claude's FINDING-{N} (from Step 2.5) against Codex's ISSUE-{N}:
+
+| Claude FINDING-{N} | Codex ISSUE-{M} | Classification |
+|--------------------|-----------------|----------------|
+| ...                | ...             | ...            |
+
+Classification options:
+- **Genuine Agreement**: Same vulnerability class + same file/line area
+- **Genuine Disagreement**: Same code area but conflicting assessment
+- **Same Direction / Different Severity**: Both flag same issue but different severity
+- **Claude-only**: Claude's finding has no Codex counterpart
+- **Codex-only**: Codex's finding has no Claude counterpart
+
+After mapping, proceed with existing finding processing below.
 
 1. Read review output from `$SESSION_DIR/review.md`
 2. Parse ISSUE-{N} blocks using regex:
@@ -143,7 +207,7 @@ Group findings by severity:
 ```markdown
 # Security Review Results - Round 1
 
-**Verdict**: REVISE
+**Verdict**: CONTINUE
 **Risk Level**: HIGH
 
 ## 🔴 Critical Issues (2)
@@ -168,23 +232,9 @@ Group findings by severity:
 
 ### For Each Finding:
 
-#### Option A: Accept and Fix
+#### Response 1: Rebuttal
 
-1. **Verify the finding** is a real vulnerability
-2. **Apply the suggested fix** or implement alternative secure solution
-3. **Document the fix** for round 2 summary
-
-Example:
-```javascript
-// ISSUE-1: SQL injection fixed
-// Before: const query = `SELECT * FROM users WHERE name = '${name}'`;
-// After: const query = 'SELECT * FROM users WHERE name = $1';
-const users = await db.query(query, [name]);
-```
-
-#### Option B: Rebut as False Positive
-
-If the finding is incorrect:
+Write concrete proof that the finding is wrong:
 
 1. **Gather evidence** showing why it's not a vulnerability
 2. **Explain mitigating controls** (e.g., input validation elsewhere)
@@ -192,13 +242,13 @@ If the finding is incorrect:
 
 Example rebuttal:
 ```
-ISSUE-3 is a false positive. The admin endpoint at /api/admin/users 
-is protected by the authenticateAdmin middleware (line 15) which 
-verifies JWT tokens and checks for admin role. The middleware is 
+ISSUE-3 is a false positive. The admin endpoint at /api/admin/users
+is protected by the authenticateAdmin middleware (line 15) which
+verifies JWT tokens and checks for admin role. The middleware is
 applied to all /api/admin/* routes in routes/index.js:42.
 ```
 
-#### Option C: Dispute Severity/Confidence
+#### Response 2: Acknowledge with Severity Dispute
 
 If the finding is valid but severity is wrong:
 
@@ -209,8 +259,8 @@ If the finding is valid but severity is wrong:
 Example:
 ```
 ISSUE-5: Agree this is a concern, but severity should be MEDIUM not HIGH.
-This endpoint is internal-only (not exposed to internet) and requires 
-VPN access. Additionally, we have rate limiting (10 req/min) which 
+This endpoint is internal-only (not exposed to internet) and requires
+VPN access. Additionally, we have rate limiting (10 req/min) which
 mitigates brute force attacks.
 ```
 
@@ -260,7 +310,7 @@ Look for:
 ### Step 4: Iterate Until Consensus
 
 Continue rounds until:
-- ✅ **VERDICT: APPROVE** - All critical/high issues resolved
+- ✅ **VERDICT: CONSENSUS** - All critical/high issues resolved
 - ⚠️ **Stalemate** - Same disputes for 2+ rounds, no progress
 - 🛑 **User stops** - Manual intervention needed
 
@@ -285,7 +335,7 @@ node "$RUNNER" stop "$SESSION_DIR"
 **Rounds**: {round_count}
 **Duration**: {duration}
 
-## Final Verdict: {APPROVE | REVISE | STALEMATE}
+## Final Verdict: {CONSENSUS | CONTINUE | STALEMATE}
 
 ## Security Risk Assessment: {CRITICAL | HIGH | MEDIUM | LOW}
 
@@ -313,14 +363,6 @@ node "$RUNNER" stop "$SESSION_DIR"
 - [ ] Security expert review for disputed findings
 - [ ] Update security documentation
 - [ ] Schedule follow-up security audit
-```
-
-### Step 3: Archive Review Artifacts
-
-```bash
-# Copy review artifacts to project docs
-mkdir -p docs/security-reviews
-cp "$SESSION_DIR/review.md" "docs/security-reviews/review-$(date +%Y%m%d).md"
 ```
 
 ---
@@ -551,8 +593,13 @@ while true; do
   case "$POLL" in POLL:running:*) sleep 15;; *) break;; esac
 done
 
-if grep -q "VERDICT: REVISE" "$SESSION_DIR/review.md" 2>/dev/null; then
-  echo "❌ Security issues found. Commit blocked."
+VERDICT_COUNT=$(awk '/^VERDICT: (CONSENSUS|CONTINUE|STALEMATE)$/ {count++} END {print count+0}' "$SESSION_DIR/review.md" 2>/dev/null)
+CONSENSUS_COUNT=$(awk '/^VERDICT: CONSENSUS$/ {count++} END {print count+0}' "$SESSION_DIR/review.md" 2>/dev/null)
+[ -n "$VERDICT_COUNT" ] || VERDICT_COUNT=0
+[ -n "$CONSENSUS_COUNT" ] || CONSENSUS_COUNT=0
+
+if [ "$VERDICT_COUNT" -ne 1 ] || [ "$CONSENSUS_COUNT" -ne 1 ]; then
+  echo "❌ Security issues found or review incomplete. Commit blocked."
   echo "Run 'codex-security-review' for details."
   exit 1
 fi
