@@ -134,7 +134,7 @@ Group findings by severity:
 ```markdown
 # Security Review Results - Round 1
 
-**Verdict**: REVISE
+**Verdict**: CONTINUE
 **Risk Level**: HIGH
 
 ## 🔴 Critical Issues (2)
@@ -159,23 +159,9 @@ Group findings by severity:
 
 ### For Each Finding:
 
-#### Option A: Accept and Fix
+#### Response 1: Rebuttal
 
-1. **Verify the finding** is a real vulnerability
-2. **Apply the suggested fix** or implement alternative secure solution
-3. **Document the fix** for round 2 summary
-
-Example:
-```javascript
-// ISSUE-1: SQL injection fixed
-// Before: const query = `SELECT * FROM users WHERE name = '${name}'`;
-// After: const query = 'SELECT * FROM users WHERE name = $1';
-const users = await db.query(query, [name]);
-```
-
-#### Option B: Rebut as False Positive
-
-If the finding is incorrect:
+Write concrete proof that the finding is wrong:
 
 1. **Gather evidence** showing why it's not a vulnerability
 2. **Explain mitigating controls** (e.g., input validation elsewhere)
@@ -183,13 +169,13 @@ If the finding is incorrect:
 
 Example rebuttal:
 ```
-ISSUE-3 is a false positive. The admin endpoint at /api/admin/users 
-is protected by the authenticateAdmin middleware (line 15) which 
-verifies JWT tokens and checks for admin role. The middleware is 
+ISSUE-3 is a false positive. The admin endpoint at /api/admin/users
+is protected by the authenticateAdmin middleware (line 15) which
+verifies JWT tokens and checks for admin role. The middleware is
 applied to all /api/admin/* routes in routes/index.js:42.
 ```
 
-#### Option C: Dispute Severity/Confidence
+#### Response 2: Acknowledge with Severity Dispute
 
 If the finding is valid but severity is wrong:
 
@@ -200,8 +186,8 @@ If the finding is valid but severity is wrong:
 Example:
 ```
 ISSUE-5: Agree this is a concern, but severity should be MEDIUM not HIGH.
-This endpoint is internal-only (not exposed to internet) and requires 
-VPN access. Additionally, we have rate limiting (10 req/min) which 
+This endpoint is internal-only (not exposed to internet) and requires
+VPN access. Additionally, we have rate limiting (10 req/min) which
 mitigates brute force attacks.
 ```
 
@@ -251,7 +237,7 @@ Look for:
 ### Step 4: Iterate Until Consensus
 
 Continue rounds until:
-- ✅ **VERDICT: APPROVE** - All critical/high issues resolved
+- ✅ **VERDICT: CONSENSUS** - All critical/high issues resolved
 - ⚠️ **Stalemate** - Same disputes for 2+ rounds, no progress
 - 🛑 **User stops** - Manual intervention needed
 
@@ -276,7 +262,7 @@ node "$RUNNER" stop "$SESSION_DIR"
 **Rounds**: {round_count}
 **Duration**: {duration}
 
-## Final Verdict: {APPROVE | REVISE | STALEMATE}
+## Final Verdict: {CONSENSUS | CONTINUE | STALEMATE}
 
 ## Security Risk Assessment: {CRITICAL | HIGH | MEDIUM | LOW}
 
@@ -304,14 +290,6 @@ node "$RUNNER" stop "$SESSION_DIR"
 - [ ] Security expert review for disputed findings
 - [ ] Update security documentation
 - [ ] Schedule follow-up security audit
-```
-
-### Step 3: Archive Review Artifacts
-
-```bash
-# Copy review artifacts to project docs
-mkdir -p docs/security-reviews
-cp "$SESSION_DIR/review.md" "docs/security-reviews/review-$(date +%Y%m%d).md"
 ```
 
 ---
@@ -542,7 +520,7 @@ while true; do
   case "$POLL" in POLL:running:*) sleep 15;; *) break;; esac
 done
 
-if grep -q "VERDICT: REVISE" "$SESSION_DIR/review.md" 2>/dev/null; then
+if grep -q "VERDICT: CONTINUE" "$SESSION_DIR/review.md" 2>/dev/null; then
   echo "❌ Security issues found. Commit blocked."
   echo "Run 'codex-security-review' for details."
   exit 1
