@@ -127,12 +127,57 @@ Report **specific activities** from `activities` array (e.g. "Codex [45s]: scann
 
 Continue while `status === "running"`. Stop on `completed|failed|timeout|stalled`.
 
+### 6.5. Information Barrier — Claude Independent Security Analysis
+
+**MUST complete before polling Codex output.** Codex is running in background — use this time productively.
+
+**Working-tree mode**: run `git diff` and `git diff --cached` yourself (or reuse the diff already collected in Step 1).
+
+**Branch mode**: run `git diff $BASE_BRANCH...HEAD` yourself (or reuse the diff already collected in Step 1).
+
+**Full mode**: identify high-risk areas (auth, database, external APIs, file operations, crypto) and read those files.
+
+Form an independent FINDING-{N} list in working context (do NOT write to a file) using OWASP Top 10 2021 and CWE patterns:
+- Injection vulnerabilities (SQL, command, XSS)
+- Authentication/authorization issues
+- Sensitive data exposure
+- Security misconfigurations
+- Cryptographic failures
+
+Use the same FINDING-{N} format as `references/output-format.md` ISSUE-{N} (same field names, including CWE/OWASP mappings). Do NOT read `$SESSION_DIR/review.md` until this analysis is complete.
+
+**INFORMATION BARRIER ends after Round 1 poll completes.** From Round 2 onwards, the barrier no longer applies.
+
 ### 7. Apply/Rebut
+
+**After Round 1 poll completes and `$SESSION_DIR/review.md` is available:**
+
+#### 7a. Parse Codex Output
 Parse issues from `poll_json.review.blocks[]` — each has `id`, `title`, `severity`, `category`, `confidence`, `cwe`, `owasp`, `problem`, `evidence`, `attack_vector`, `suggested_fix`. Verdict in `review.verdict.status`. Risk summary in `review.verdict.risk_summary` (`{ critical, high, medium, low }`). Fallback: `review.raw_markdown`.
 
 Present findings grouped by severity (Critical → High → Medium → Low). Format: `ISSUE-{N}: {title} [{cwe}] [{owasp}] — confidence: {confidence}`. Critical/High = blocking; Medium/Low = advisory.
 
-- **Valid issues**: fix vulnerabilities in code, record fix evidence.
+#### 7b. Build FINDING↔ISSUE Mapping Table
+Map Claude's FINDING-{N} (from Step 6.5) against Codex's ISSUE-{M}:
+
+| Claude FINDING-{N} | Codex ISSUE-{M} | Classification |
+|--------------------|-----------------|----------------|
+| ...                | ...             | ...            |
+
+Classification options:
+- **Genuine Agreement**: FINDING-{N} and ISSUE-{M} identify the same security vulnerability
+- **Codex-only**: ISSUE-{M} has no matching Claude FINDING
+- **Claude-only**: FINDING-{N} has no matching Codex ISSUE
+- **Genuine Disagreement**: Conflicting security assessments of the same code
+
+#### 7c. Apply/Rebut Using Cross-Analysis Context
+For each ISSUE-{N}:
+- Genuine agreement or Codex-only → validate and prepare fix evidence
+- Claude-only → include in final report as Claude finding
+- Genuine disagreement → rebut with concrete proof (paths, tests, mitigating controls)
+
+#### 7d. Apply Fixes
+- **Valid issues**: validate findings, prepare rebuttals or severity adjustments, and provide evidence without editing code.
 - **False positives**: rebut with concrete proof (paths, tests, mitigating controls).
 - **Severity disputes**: acknowledge issue, explain why severity should differ with context.
 - **Branch mode only**: commit fixes (`git add` + `git commit`) before resuming — Codex reads `git diff <base>...HEAD` which only shows committed changes.
