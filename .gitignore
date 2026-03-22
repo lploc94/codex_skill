@@ -15,6 +15,9 @@ node_modules/
 .DS_Store
 .gitnexus
 
+# Git worktrees
+.worktrees/
+
 # Working documents (project-level, not shipped)
 SESSION_SUMMARY.md
 PROGRESS_REPORT.md

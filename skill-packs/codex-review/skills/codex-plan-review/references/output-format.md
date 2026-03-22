@@ -17,8 +17,11 @@ Use this exact shape (copy the entire block below as `{OUTPUT_FORMAT}`):
 - Suggested fix: {plan-level change}
 
 ### VERDICT
-- Status: APPROVE | REVISE
+- Status: CONSENSUS | CONTINUE | STALEMATE
+  - CONSENSUS: No remaining plan issues — ready to implement
+  - CONTINUE: Issues remain that require another review round
+  - STALEMATE: Circular debate — same disputes for 2+ rounds with no progress
 - Reason: {short reason}
 ```
 
-**Zero-issue rule**: If no issues remain, omit all ISSUE blocks and return only the VERDICT block with `Status: APPROVE` and `Reason: Plan is complete, well-structured, and addresses all acceptance criteria.`
+**Zero-issue rule**: If no issues remain, omit all ISSUE blocks and return only the VERDICT block with `Status: CONSENSUS` and `Reason: Plan is complete, well-structured, and addresses all acceptance criteria.`

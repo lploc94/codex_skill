@@ -79,6 +79,22 @@ printf '%s' "$PROMPT" | node "$RUNNER" start "$SESSION_DIR" --effort "$EFFORT"
 ```
 Validate JSON: `{"status":"started","round":1}`. Error with `CODEX_NOT_FOUND` → tell user to install codex.
 
+### 5.5. Information Barrier — Claude Independent Plan Analysis
+
+**MUST complete before polling Codex output.** Codex is running in background — use this time productively.
+
+Read the plan file at `$PLAN_PATH` directly. Do NOT read `$SESSION_DIR/review.md` until this analysis is complete.
+
+Form an independent FINDING-{N} list in working context (do NOT write to a file):
+- Correctness issues (steps that are wrong or will fail)
+- Architecture concerns (structural problems with the approach)
+- Sequencing/dependency problems (steps out of order, missing prerequisites)
+- Scope gaps or risks (missing requirements, underestimated complexity)
+
+Use the same FINDING-{N} format as `references/output-format.md` ISSUE-{N} (same field names).
+
+**INFORMATION BARRIER ends after Round 1 poll completes.** From Round 2 onwards, the barrier no longer applies.
+
 ### 6. Poll
 ```bash
 POLL_JSON=$(node "$RUNNER" poll "$SESSION_DIR")
@@ -90,8 +106,32 @@ Report **specific activities** from `activities` array (e.g. "Codex [45s]: readi
 Continue while `status === "running"`. Stop on `completed|failed|timeout|stalled`.
 
 ### 7. Apply/Rebut
+
+**After Round 1 poll completes and `$SESSION_DIR/review.md` is available:**
+
+#### 7a. Parse Codex Output
 Parse issues from `poll_json.review.blocks[]` — each has `id`, `title`, `severity`, `category`, `location`, `problem`, `evidence`, `suggested_fix`. Verdict in `review.verdict.status`. Fallback: `review.raw_markdown`.
 
+#### 7b. Build FINDING↔ISSUE Mapping Table
+Map Claude's FINDING-{N} (from Step 5.5) against Codex's ISSUE-{M}:
+
+| Claude FINDING-{N} | Codex ISSUE-{M} | Classification |
+|--------------------|-----------------|----------------|
+| ...                | ...             | ...            |
+
+Classification options:
+- **Genuine Agreement**: FINDING-{N} and ISSUE-{M} identify the same plan problem
+- **Codex-only**: ISSUE-{M} has no matching Claude FINDING
+- **Claude-only**: FINDING-{N} has no matching Codex ISSUE
+- **Genuine Disagreement**: Conflicting assessments of the same plan section
+
+#### 7c. Determine Response for Each ISSUE
+For each ISSUE-{N}:
+- Genuine agreement or Codex-only → apply fix to the plan file
+- Claude-only → include in final report as Claude finding
+- Genuine disagreement → write rebuttal with concrete reasoning
+
+#### 7d. Apply Fixes
 - **Valid issues**: apply fixes directly to the plan file, **save the plan file** before resuming — Codex re-reads from the plan path.
 - **Invalid issues**: rebut with concrete proof (reasoning, references, behavior).
 
@@ -115,7 +155,7 @@ Resume: `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "
 | Metric | Value |
 |--------|-------|
 | Rounds | {N} |
-| Verdict | {APPROVE/REVISE/STALEMATE} |
+| Verdict | {CONSENSUS/CONTINUE/STALEMATE} |
 | Issues Found | {total} |
 | Issues Fixed | {fixed_count} |
 | Issues Disputed | {disputed_count} |

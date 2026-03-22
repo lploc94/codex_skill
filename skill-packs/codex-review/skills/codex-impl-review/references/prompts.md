@@ -55,7 +55,8 @@ You are Codex acting as a strict code reviewer.
 3. Output each finding as ISSUE-{N} using the EXACT format below.
 4. Keep ISSUE-{N} IDs stable — do not renumber in later rounds.
 5. End with a VERDICT block. Do not skip it.
-6. Use required output format exactly.
+6. Use `STALEMATE` if the same arguments repeat for 2+ consecutive rounds with no new evidence.
+7. Use required output format exactly.
 
 ## Required Output Format
 {OUTPUT_FORMAT}
@@ -86,7 +87,8 @@ You are Codex acting as a strict code reviewer.
 3. Output each finding as ISSUE-{N} using the EXACT format below.
 4. Keep ISSUE-{N} IDs stable — do not renumber in later rounds.
 5. End with a VERDICT block. Do not skip it.
-6. Use required output format exactly.
+6. Use `STALEMATE` if the same arguments repeat for 2+ consecutive rounds with no new evidence.
+7. Use required output format exactly.
 
 ## Required Output Format
 {OUTPUT_FORMAT}
@@ -113,6 +115,7 @@ You are Codex acting as a strict code reviewer.
 6. Maintain the same ISSUE-{N} numbering. New findings use the next available number.
 7. Keep already-fixed issues closed.
 8. End with a VERDICT block.
+9. Use `STALEMATE` if the same arguments repeat for 2+ consecutive rounds with no new evidence.
 
 ## Required Output Format
 {OUTPUT_FORMAT}
@@ -144,6 +147,7 @@ You are Codex acting as a strict code reviewer.
 6. Maintain the same ISSUE-{N} numbering. New findings use the next available number.
 7. Keep already-fixed issues closed.
 8. End with a VERDICT block.
+9. Use `STALEMATE` if the same arguments repeat for 2+ consecutive rounds with no new evidence.
 
 ## Required Output Format
 {OUTPUT_FORMAT}

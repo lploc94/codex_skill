@@ -51,7 +51,8 @@ Read the plan file directly at: {PLAN_PATH}
 4. Do NOT propose code changes — review only the plan quality.
 5. Output each finding as ISSUE-{N} using the EXACT format below.
 6. End with a VERDICT block. Do not skip it.
-7. Keep ISSUE-{N} IDs stable — do not renumber in later rounds.
+7. Use `STALEMATE` if the same arguments repeat for 2+ consecutive rounds with no new evidence.
+8. Keep ISSUE-{N} IDs stable — do not renumber in later rounds.
 
 ## Required Output Format
 {OUTPUT_FORMAT}
@@ -81,6 +82,7 @@ Read the updated plan file directly at: {PLAN_PATH}
 5. Focus on remaining open issues and any NEW findings from the updated plan.
 6. Maintain the same ISSUE-{N} numbering. New findings use the next available number.
 7. End with a VERDICT block.
+8. Use `STALEMATE` if the same arguments repeat for 2+ consecutive rounds with no new evidence.
 
 ## Required Output Format
 {OUTPUT_FORMAT}

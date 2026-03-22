@@ -105,6 +105,24 @@ printf '%s' "$PROMPT" | node "$RUNNER" start "$SESSION_DIR" --effort "$EFFORT"
 ```
 Validate JSON: `{"status":"started","round":1}`. Error with `CODEX_NOT_FOUND` → tell user to install codex.
 
+### 5.5. Information Barrier — Claude Independent Code Analysis
+
+**MUST complete before polling Codex output.** Codex is running in background — use this time productively.
+
+**Working-tree mode**: run `git diff` and `git diff --cached` yourself (or reuse the diff already collected in Step 1 — working tree hasn't changed).
+
+**Branch mode**: run `git diff $BASE_BRANCH...HEAD` yourself (or reuse the diff already collected in Step 1).
+
+Form an independent FINDING-{N} list in working context (do NOT write to a file):
+- Bugs and edge cases
+- Security issues
+- Performance concerns
+- Maintainability problems
+
+Use the same FINDING-{N} format as `references/output-format.md` ISSUE-{N} (same field names). Do NOT read `$SESSION_DIR/review.md` until this analysis is complete.
+
+**INFORMATION BARRIER ends after Round 1 poll completes.** From Round 2 onwards, the barrier no longer applies.
+
 ### 6. Poll
 ```bash
 POLL_JSON=$(node "$RUNNER" poll "$SESSION_DIR")
@@ -116,8 +134,32 @@ Report **specific activities** from `activities` array (e.g. "Codex [45s]: readi
 Continue while `status === "running"`. Stop on `completed|failed|timeout|stalled`.
 
 ### 7. Apply/Rebut
+
+**After Round 1 poll completes and `$SESSION_DIR/review.md` is available:**
+
+#### 7a. Parse Codex Output
 Parse issues from `poll_json.review.blocks[]` — each has `id`, `title`, `severity`, `category`, `location`, `problem`, `evidence`, `suggested_fix`. Verdict in `review.verdict.status`. Fallback: `review.raw_markdown`.
 
+#### 7b. Build FINDING↔ISSUE Mapping Table
+Map Claude's FINDING-{N} (from Step 5.5) against Codex's ISSUE-{M}:
+
+| Claude FINDING-{N} | Codex ISSUE-{M} | Classification |
+|--------------------|-----------------|----------------|
+| ...                | ...             | ...            |
+
+Classification options:
+- **Genuine Agreement**: FINDING-{N} and ISSUE-{M} identify the same code problem
+- **Codex-only**: ISSUE-{M} has no matching Claude FINDING
+- **Claude-only**: FINDING-{N} has no matching Codex ISSUE
+- **Genuine Disagreement**: Conflicting assessments of the same code
+
+#### 7c. Apply/Rebut Using Cross-Analysis Context
+For each ISSUE-{N}:
+- Genuine agreement or Codex-only → apply fix to code
+- Claude-only → include in final report as Claude finding
+- Genuine disagreement → write rebuttal with concrete proof (paths, tests, behavior)
+
+#### 7d. Apply Fixes
 - **Valid issues**: edit code, record fix evidence.
 - **Invalid issues**: rebut with concrete proof (paths, tests, behavior).
 - **Branch mode only**: commit fixes (`git add` + `git commit`) before resuming — Codex reads `git diff <base>...HEAD` which only shows committed changes.
@@ -153,7 +195,7 @@ Resume: `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "
 | Metric | Value |
 |--------|-------|
 | Rounds | {N} |
-| Verdict | {APPROVE/REVISE/STALEMATE} |
+| Verdict | {CONSENSUS/CONTINUE/STALEMATE} |
 | Issues Found | {total} |
 | Issues Fixed | {fixed_count} |
 | Issues Disputed | {disputed_count} |
