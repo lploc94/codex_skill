@@ -94,19 +94,26 @@ Compare with `codex-impl-review/references/prompts.md` — it uses `## Required 
 
   Apply the same change to the Round 2+ / Rebuttal prompt template if it also has inline output format.
 
-- [ ] **Step 3: Verify no nested triple-backticks remain**
+- [ ] **Step 3: Verify nested Output Format sections were removed and placeholder is present**
 
   ```bash
-  # Count triple-backtick occurrences in each fenced block
-  grep -c '```' skill-packs/codex-review/skills/codex-security-review/references/prompts.md
+  # Verify the inline Output Format and VERDICT Block sections were removed from the templates
+  grep -n "## Output Format\|## Verdict Block\|VERDICT: APPROVE | REVISE\|VERDICT: APPROVE \| REVISE" \
+    skill-packs/codex-review/skills/codex-security-review/references/prompts.md
   ```
-  Each outermost fenced block should have exactly 2 triple-backtick lines (open + close). The `{OUTPUT_FORMAT}` placeholder does not add any backticks.
+  Expected: zero matches (these were inside the fenced template and are now gone).
 
-  Also verify the placeholder is present:
   ```bash
+  # Verify the {OUTPUT_FORMAT} placeholder is present in each template
   grep -n "OUTPUT_FORMAT" skill-packs/codex-review/skills/codex-security-review/references/prompts.md
   ```
-  Expected: at least 1 match per prompt template.
+  Expected: at least 1 match per prompt template (Round 1 and Round 2+ / Rebuttal).
+
+  ```bash
+  # Verify no nested triple-backticks remain inside any template
+  grep -n "Required Output Format" skill-packs/codex-review/skills/codex-security-review/references/prompts.md
+  ```
+  Expected: at least 1 match showing the `## Required Output Format\n{OUTPUT_FORMAT}` pattern was added.
 
 - [ ] **Step 4: Commit**
 
@@ -226,7 +233,7 @@ Also, as part of this task, update all `APPROVE`/`REVISE` strings in this file (
 
 - [ ] **Step 4: Update all APPROVE/REVISE in this file**
 
-  Make these 4 exact replacements:
+  Make these **5** exact replacements (the 5th catches an additional occurrence in Phase 2 example):
 
   | Old text | New text |
   |----------|----------|
@@ -234,20 +241,22 @@ Also, as part of this task, update all `APPROVE`/`REVISE` strings in this file (
   | `VERDICT: APPROVE - All critical/high issues resolved` | `VERDICT: CONSENSUS - All critical/high issues resolved` |
   | `{APPROVE \| REVISE \| STALEMATE}` (Final Verdict header) | `{CONSENSUS \| CONTINUE \| STALEMATE}` |
   | `grep -q "VERDICT: REVISE"` (CI/CD example) | `grep -q "VERDICT: CONTINUE"` |
+  | `**Verdict**: REVISE` (Phase 2 example line) | `**Verdict**: CONTINUE` |
 
 - [ ] **Step 5: Verify**
 
   ```bash
-  grep -n "AskUserQuestion\|docs/security-reviews\|Option A\|Apply the suggested fix\|VERDICT: APPROVE\|VERDICT: REVISE" \
+  # Check all old vocabulary forms are gone (including non-VERDICT:-prefixed forms)
+  grep -n "AskUserQuestion\|docs/security-reviews\|Option A\|Apply the suggested fix\|VERDICT: APPROVE\|VERDICT: REVISE\|Verdict.*APPROVE\|Verdict.*REVISE" \
     skill-packs/codex-review/skills/codex-security-review/references/workflow.md
   ```
   Expected: zero matches (all removed/replaced).
 
   ```bash
-  grep -n "VERDICT: CONSENSUS\|VERDICT: CONTINUE\|VERDICT: STALEMATE" \
+  grep -n "VERDICT: CONSENSUS\|VERDICT: CONTINUE\|VERDICT: STALEMATE\|Verdict.*CONTINUE" \
     skill-packs/codex-review/skills/codex-security-review/references/workflow.md
   ```
-  Expected: at least 4 matches (one per replacement location).
+  Expected: at least 5 matches (one per replacement location).
 
 - [ ] **Step 6: Commit**
 
@@ -377,12 +386,13 @@ Read `codex-impl-review/references/workflow.md` to find the exact prompt assembl
   Maintain this table across all rounds. Update Classification and Status columns as rounds progress.
   ```
 
-- [ ] **Step 6: Verify the new file exists**
+- [ ] **Step 6: Verify the new file exists and contains FINDING-{N} format and Cross-Analysis table**
 
   ```bash
-  ls skill-packs/codex-review/skills/codex-security-review/references/
+  grep -n "FINDING-\|Cross-Analysis\|Classification" \
+    skill-packs/codex-review/skills/codex-security-review/references/claude-analysis-template.md
   ```
-  Expected: `claude-analysis-template.md` appears in the listing.
+  Expected: matches showing `FINDING-{N}` format, `Cross-Analysis Matching Protocol`, and `Classification` column header.
 
 - [ ] **Step 7: Commit both changes**
 
@@ -619,15 +629,15 @@ Read `codex-pr-review/references/workflow.md` Steps 2.5 and 4 as the gold standa
 
 - [ ] **Step 3: Update Phase 3 cross-analysis step**
 
-  Find the Phase 3 step where Claude processes Codex findings (the step immediately after polling). Add FINDING↔ISSUE mapping to the beginning of that step, using the same classification table format as in Tasks 6 and 7 (Genuine Agreement / Genuine Disagreement / Claude-only / Codex-only / Same Direction Different Severity).
+  Find the Phase 3 step that processes Codex findings — specifically look for **Phase 3, Step 3** (or the step with a heading like "Parse Security Findings" or "Process Codex Output") that comes after Phase 2 polling completes. This is the step that reads `review.md` and processes each ISSUE block. Add FINDING↔ISSUE mapping to the beginning of that step, using the same classification table format as in Tasks 6 and 7 (Genuine Agreement / Genuine Disagreement / Claude-only / Codex-only / Same Direction Different Severity).
 
-- [ ] **Step 4: Verify**
+- [ ] **Step 4: Verify Step 2.5, cross-analysis, and classification markers are present**
 
   ```bash
-  grep -n "Information Barrier\|claude-analysis-template\|FINDING-{N}\|working context" \
+  grep -n "Information Barrier\|claude-analysis-template\|FINDING.*ISSUE.*Classification\|Genuine Agreement\|Claude-only\|Codex-only\|working context" \
     skill-packs/codex-review/skills/codex-security-review/references/workflow.md
   ```
-  Expected: matches for each pattern.
+  Expected: matches for Information Barrier step, template reference, FINDING↔ISSUE mapping table header, and all classification types.
 
 - [ ] **Step 5: Commit**
 
@@ -704,18 +714,26 @@ Read `codex-pr-review/references/workflow.md` Steps 2.5 and 4 as the gold standa
 
 **Context:** plan-review currently uses `APPROVE | REVISE`. Three files need updates. In `prompts.md`, the VERDICT values are injected via `{OUTPUT_FORMAT}` placeholder (not inline), so only the instruction line "End with a VERDICT block" needs updating. In `workflow.md`, update stop conditions and the final report summary table's Verdict row value.
 
-- [ ] **Step 1: Update output-format.md VERDICT block**
+- [ ] **Step 1: Update output-format.md VERDICT block (all occurrences)**
 
-  Read `skill-packs/codex-review/skills/codex-plan-review/references/output-format.md`. Find:
+  Read `skill-packs/codex-review/skills/codex-plan-review/references/output-format.md`. Make these exact replacements:
+
+  **Primary Status line:**
   ```
   - Status: APPROVE | REVISE
   ```
-  Change to:
+  → Change to:
   ```
   - Status: CONSENSUS | CONTINUE | STALEMATE
   ```
 
-  Add descriptions:
+  **Zero-issue rule text (line ~24):** Find the sentence:
+  ```
+  Status: APPROVE` and `Reason: Plan is complete, well-structured, and addresses all acceptance criteria.
+  ```
+  Replace `Status: APPROVE` in this sentence with `Status: CONSENSUS`.
+
+  Add descriptions for the updated primary Status values:
   - `CONSENSUS`: No remaining plan issues — ready to implement
   - `CONTINUE`: Issues remain that require another review round
   - `STALEMATE`: Circular debate — same disputes for 2+ rounds with no progress
@@ -747,7 +765,7 @@ Read `codex-pr-review/references/workflow.md` Steps 2.5 and 4 as the gold standa
     skill-packs/codex-review/skills/codex-plan-review/references/prompts.md \
     skill-packs/codex-review/skills/codex-plan-review/references/workflow.md
   ```
-  Expected: zero matches for old vocabulary in all 3 files.
+  Expected: zero matches for old vocabulary in all 3 files (including zero-issue rule text and all workflow occurrences).
 
   ```bash
   grep -n "CONSENSUS\|CONTINUE\|STALEMATE" \
@@ -776,18 +794,26 @@ Read `codex-pr-review/references/workflow.md` Steps 2.5 and 4 as the gold standa
 
 **Context:** Same as Task 10 but for impl-review. The `prompts.md` has 4 templates (Working Tree Round 1, Branch Round 1, Rebuttal Working-tree, Rebuttal Branch) — each has an instruction line referencing VERDICT that needs updating. VERDICT values are in `output-format.md` via `{OUTPUT_FORMAT}` placeholder.
 
-- [ ] **Step 1: Update output-format.md VERDICT block**
+- [ ] **Step 1: Update output-format.md VERDICT block (all occurrences)**
 
-  Read `skill-packs/codex-review/skills/codex-impl-review/references/output-format.md`. Find:
+  Read `skill-packs/codex-review/skills/codex-impl-review/references/output-format.md`. Make these exact replacements:
+
+  **Primary Status line:**
   ```
   - Status: APPROVE | REVISE
   ```
-  Change to:
+  → Change to:
   ```
   - Status: CONSENSUS | CONTINUE | STALEMATE
   ```
 
-  Add descriptions:
+  **Zero-issue rule text (line ~24):** Find the sentence:
+  ```
+  Status: APPROVE` and `Reason: All changes are correct, well-tested, and safe to merge.
+  ```
+  Replace `Status: APPROVE` in this sentence with `Status: CONSENSUS`.
+
+  Add descriptions for the updated primary Status values:
   - `CONSENSUS`: No remaining code issues — changes are correct and safe
   - `CONTINUE`: Issues remain that require fixes and another review round
   - `STALEMATE`: Circular debate — same disputes for 2+ rounds with no progress
@@ -880,15 +906,20 @@ Read `codex-pr-review/references/workflow.md` Steps 2.5 and 4 as the gold standa
 - [ ] **Step 4: Verify unmodified skills are untouched**
 
   ```bash
-  git diff HEAD skill-packs/codex-review/skills/codex-commit-review/ \
-                 skill-packs/codex-review/skills/codex-think-about/ \
-                 skill-packs/codex-review/skills/codex-codebase-review/
-  ```
-  Expected: no changes (these 3 skills should not be touched).
+  # Verify commit-review still uses its original vocabulary (unchanged)
+  grep -n "APPROVE\|REVISE\|CONSENSUS\|CONTINUE\|STALEMATE\|Information Barrier" \
+    skill-packs/codex-review/skills/codex-commit-review/references/workflow.md | head -5
 
-- [ ] **Step 5: Final commit (if any stray uncommitted changes)**
+  # Verify think-about and codebase-review have no VERDICT/APPROVE vocabulary changes
+  grep -rn "CONSENSUS\|STALEMATE" \
+    skill-packs/codex-review/skills/codex-think-about/ \
+    skill-packs/codex-review/skills/codex-codebase-review/
+  ```
+  Expected for think-about/codebase-review: zero matches for new vocabulary (confirming they were not modified).
+
+- [ ] **Step 5: Verify clean working tree**
 
   ```bash
-  git status
+  git status --short
   ```
-  Expected: clean working tree (all changes committed in previous tasks).
+  Expected: empty output or only untracked/ignored files (all task changes committed).
