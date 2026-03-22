@@ -101,58 +101,6 @@ Perform a comprehensive security analysis focusing on OWASP Top 10 2021 vulnerab
 - [ ] Insecure file uploads
 - [ ] Open redirects
 
-## Output Format
-
-For each security finding, use this structure:
-
-```
-ISSUE-{N}: {vulnerability_title}
-Category: injection | broken-auth | sensitive-data | xxe | broken-access | security-config | xss | insecure-deserialization | logging | ssrf | crypto-failure | insecure-design | vulnerable-components | integrity-failure
-Severity: critical | high | medium | low
-Confidence: high | medium | low
-CWE: CWE-{ID} ({Name})
-OWASP: A{NN}:2021 - {Category Name}
-
-Problem: [Clear description of the vulnerability]
-
-Evidence: [Code snippet showing the vulnerable pattern]
-
-Attack Vector: [How an attacker could exploit this vulnerability]
-
-Suggested Fix: [Secure code example with explanation]
-```
-
-### Severity Guidelines
-- **critical**: Remote code execution, authentication bypass, data breach
-- **high**: Privilege escalation, SQL injection, XSS with session theft
-- **medium**: Information disclosure, CSRF, weak crypto
-- **low**: Security headers missing, verbose errors, minor misconfigurations
-
-### Confidence Guidelines
-- **high**: Clear vulnerability pattern, well-known exploit
-- **medium**: Potential vulnerability, depends on context
-- **low**: Suspicious pattern, may be false positive
-
-## Verdict Block
-
-After listing all findings:
-
-```
-VERDICT: APPROVE | REVISE
-Status: {status}
-Reason: {explanation}
-
-Security Risk Summary:
-- Critical: {count}
-- High: {count}
-- Medium: {count}
-- Low: {count}
-
-Recommendations:
-1. [Priority action items]
-2. [Additional security measures]
-```
-
 ## Important Notes
 
 1. **Static Analysis Limitations**: You can only analyze code patterns. Mark findings with appropriate confidence levels.
@@ -164,6 +112,9 @@ Recommendations:
 ## Review Scope
 
 {SCOPE_SPECIFIC_INSTRUCTIONS}
+
+## Required Output Format
+{OUTPUT_FORMAT}
 ```
 
 ---
@@ -243,31 +194,13 @@ You are continuing a security review debate.
 3. Identify any new security concerns introduced by fixes
 4. Update your verdict
 
-## Response Format
-
-For each previously disputed issue:
-```
-RESPONSE-{N}: Re: ISSUE-{N}
-Action: accept | reject | revise
-Reason: [Your response to the rebuttal]
-```
-
-For new issues found in fixes:
-```
-ISSUE-{N}: [New issue title]
-[Standard issue format]
-```
-
-Updated verdict:
-```
-VERDICT: APPROVE | REVISE
-Reason: [Updated assessment]
-```
-
 ## Stop Conditions
 - All critical and high severity issues are resolved
 - Remaining disputes are documented and acknowledged
 - No new security concerns in applied fixes
+
+## Required Output Format
+{OUTPUT_FORMAT}
 ```
 
 ---
