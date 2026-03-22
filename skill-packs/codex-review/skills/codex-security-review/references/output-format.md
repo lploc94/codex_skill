@@ -223,9 +223,14 @@ Full CWE list: https://cwe.mitre.org/
 ## Verdict Block
 
 ```
-VERDICT: APPROVE | REVISE
+VERDICT: CONSENSUS | CONTINUE | STALEMATE
 Status: {complete | stalemate | in-progress}
 Reason: {explanation}
+
+Verdict values:
+- CONSENSUS: All critical/high security issues resolved or agreed-upon — ready to proceed
+- CONTINUE: Security issues remain that require another review round
+- STALEMATE: Circular debate — same disputes for 2+ rounds with no progress
 
 Security Risk Summary:
 - Critical: {count} issues

@@ -115,6 +115,8 @@ Perform a comprehensive security analysis focusing on OWASP Top 10 2021 vulnerab
 
 ## Required Output Format
 {OUTPUT_FORMAT}
+
+End with a VERDICT block. Do not skip it. Use `STALEMATE` if the same arguments repeat for 2+ consecutive rounds with no new evidence.
 ```
 
 ---
@@ -201,6 +203,8 @@ You are continuing a security review debate.
 
 ## Required Output Format
 {OUTPUT_FORMAT}
+
+End with a VERDICT block. Do not skip it. Use `STALEMATE` if the same arguments repeat for 2+ consecutive rounds with no new evidence.
 ```
 
 ---
