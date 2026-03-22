@@ -45,14 +45,31 @@ This document describes the execution workflow for security-focused code review 
 
 ## Phase 1: Setup and Initialization
 
-### Step 1: Validate Prerequisites
+### Step 1: Detect Scope and Base Branch
+
+**Auto-detect scope**:
+- Run `git status --short` — non-empty output → `working-tree`
+- Else run `git rev-list @{u}..HEAD` — non-empty → `branch`
+- If both conditions true, use `working-tree`
+- If neither, ask user or default to `full`
+
+**For branch mode, determine base branch**:
+- Check if upstream is set: `git rev-parse --abbrev-ref @{u}` → use upstream's branch
+- Else try `main`: `git rev-parse --verify main`
+- Else try `master`: `git rev-parse --verify master`
+- Else use remote HEAD: `git symbolic-ref refs/remotes/origin/HEAD`
+- If all fail, ask user for base branch name
+
+Store as `$BASE_BRANCH` for branch mode.
+
+### Step 2: Validate Prerequisites
 
 - Verify inside a git repository: `git rev-parse --show-toplevel`. If not a git repo, abort (unless scope=full on non-git project).
 - **Working-tree mode**: verify changes exist: `git diff --quiet && git diff --cached --quiet` must FAIL.
-- **Branch mode**: verify base branch exists: `git rev-parse --verify <base-branch>`. Verify diff exists: `git diff <base>...HEAD --quiet` must FAIL.
+- **Branch mode**: verify base branch exists: `git rev-parse --verify $BASE_BRANCH`. Verify diff exists: `git diff $BASE_BRANCH...HEAD --quiet` must FAIL.
 - **Full mode**: no additional git checks needed (scans entire codebase).
 
-### Step 2: Build Security Review Prompt
+### Step 3: Build Security Review Prompt
 
 Select appropriate prompt template from `references/prompts.md`:
 - **Working-tree mode**: Focus on uncommitted changes
@@ -71,7 +88,10 @@ Build `$PROMPT` using multi-step placeholder replacement.
 DO NOT use a single sed pipeline — `output-format.md` may contain `&`, `\`, `/` characters
 that corrupt sed replacements. Use `printf '%s'` piping.
 
-a) Read `references/prompts.md` as template base
+a) Extract only the Round 1 prompt section from `references/prompts.md`:
+   - Start from `## Security Review Prompt (Round 1)`
+   - End before `## Security Review Prompt - Working Tree Mode`
+   - Do NOT include Round 2+ prompt sections
 b) Replace `{WORKING_DIR}` with current working directory
 c) Replace `{SCOPE}` with detected `$SCOPE` value
 d) Replace `{EFFORT}` with detected `$EFFORT` value
@@ -79,7 +99,8 @@ e) Replace `{SCOPE_SPECIFIC_INSTRUCTIONS}` with the scope-specific block from pr
    matching the detected `$SCOPE` (working-tree / branch / full)
 f) Replace `{OUTPUT_FORMAT}` by reading `references/output-format.md` in full
    using: `printf '%s' "$(cat references/output-format.md)"`
-g) Replace any remaining placeholders (`{BASE_BRANCH}` etc.)
+g) Replace `{BASE_BRANCH}` with `$BASE_BRANCH` (branch mode only)
+h) Replace any remaining placeholders
 
 Store result as `$PROMPT`.
 

@@ -399,7 +399,6 @@ Updated assessment:
 - Severity: {new_severity} (was {old_severity})
 - Confidence: {new_confidence} (was {old_confidence})
 - Reason: [Why the assessment changed]
-```
 
 ---
 

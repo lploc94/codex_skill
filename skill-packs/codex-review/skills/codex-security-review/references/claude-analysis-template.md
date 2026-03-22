@@ -51,4 +51,4 @@ Classification rules:
 - **Claude-only**: Claude's finding has no Codex counterpart
 - **Codex-only**: Codex's finding has no Claude counterpart
 
-Maintain this table across all rounds. Update Classification and Status columns as rounds progress.
+Maintain this table across all rounds. Update Classification column as rounds progress.
