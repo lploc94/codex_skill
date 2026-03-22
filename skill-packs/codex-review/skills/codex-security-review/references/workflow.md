@@ -65,9 +65,7 @@ Include:
 - Secrets scanning instructions
 - Effort-appropriate depth
 
----
-
-## Step 1.8: Assemble Prompt
+### Step 1.8: Assemble Prompt
 
 Build `$PROMPT` using multi-step placeholder replacement.
 DO NOT use a single sed pipeline — `output-format.md` may contain `&`, `\`, `/` characters
