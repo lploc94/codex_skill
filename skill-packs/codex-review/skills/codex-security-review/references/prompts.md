@@ -225,7 +225,6 @@ Recommendation: [Proceed with caution | Block merge | Security expert review req
 
 ## Example Security Finding
 
-```
 ISSUE-1: SQL Injection in user search endpoint
 Category: injection
 Severity: critical
@@ -256,13 +255,11 @@ const users = await db.query(query, [req.query.name]);
 ```
 
 Parameterized queries ensure user input is treated as data, not executable SQL code.
-```
 
 ---
 
 ## Example Secrets Detection
 
-```
 ISSUE-2: Hardcoded AWS credentials in configuration file
 Category: sensitive-data
 Severity: critical
@@ -303,7 +300,6 @@ Additionally:
 2. Use AWS IAM roles for EC2/Lambda instead of access keys
 3. Add config/*.js to .gitignore
 4. Use AWS Secrets Manager for production credentials
-```
 
 ---
 

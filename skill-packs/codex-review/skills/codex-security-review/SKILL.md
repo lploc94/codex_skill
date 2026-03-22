@@ -34,7 +34,7 @@ RUNNER="{{RUNNER_PATH}}"
 4. Poll with adaptive intervals (Round 1: 60s/60s/30s/15s..., Round 2+: 30s/15s...). After each poll, report **specific activities** from poll output (e.g. which files Codex is analyzing, what vulnerability patterns it's checking). See `references/workflow.md` for parsing guide. NEVER report generic "Codex is running" — always extract concrete details.
 5. Parse security findings with `references/output-format.md` (includes CWE/OWASP mappings).
 6. Fix valid vulnerabilities in code; rebut false positives with evidence.
-7. Resume debate via `node "$RUNNER" resume "$SESSION_DIR"` until `APPROVE` or stalemate.
+7. Resume debate via `node "$RUNNER" resume "$SESSION_DIR"` until `CONSENSUS` verdict or stalemate.
 8. Return final security assessment with risk summary.
 
 ### Effort Level Guide

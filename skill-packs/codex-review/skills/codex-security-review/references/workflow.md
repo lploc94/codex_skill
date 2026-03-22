@@ -572,7 +572,10 @@ while true; do
   case "$POLL" in POLL:running:*) sleep 15;; *) break;; esac
 done
 
-if ! grep -qE '^VERDICT: CONSENSUS$' "$SESSION_DIR/review.md" 2>/dev/null; then
+VERDICT_COUNT=$(grep -cE '^VERDICT: (CONSENSUS|CONTINUE|STALEMATE)$' "$SESSION_DIR/review.md" 2>/dev/null || echo 0)
+CONSENSUS_COUNT=$(grep -cE '^VERDICT: CONSENSUS$' "$SESSION_DIR/review.md" 2>/dev/null || echo 0)
+
+if [ "$VERDICT_COUNT" -ne 1 ] || [ "$CONSENSUS_COUNT" -ne 1 ]; then
   echo "❌ Security issues found or review incomplete. Commit blocked."
   echo "Run 'codex-security-review' for details."
   exit 1
