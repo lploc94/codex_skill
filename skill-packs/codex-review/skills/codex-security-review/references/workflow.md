@@ -45,23 +45,14 @@ This document describes the execution workflow for security-focused code review 
 
 ## Phase 1: Setup and Initialization
 
-### Step 1: Gather User Input
-
-Ask the user for:
-1. **Effort level**: `low`, `medium`, `high`, or `xhigh` (default: `high`)
-2. **Review scope**: `working-tree`, `branch`, or `full` (default: `working-tree`)
-3. **Base branch** (if scope is `branch`): Discover and validate base branch
-
-Use `AskUserQuestion` to collect these inputs in a single prompt.
-
-### Step 2: Validate Prerequisites
+### Step 1: Validate Prerequisites
 
 - Verify inside a git repository: `git rev-parse --show-toplevel`. If not a git repo, abort (unless scope=full on non-git project).
 - **Working-tree mode**: verify changes exist: `git diff --quiet && git diff --cached --quiet` must FAIL.
 - **Branch mode**: verify base branch exists: `git rev-parse --verify <base-branch>`. Verify diff exists: `git diff <base>...HEAD --quiet` must FAIL.
 - **Full mode**: no additional git checks needed (scans entire codebase).
 
-### Step 3: Build Security Review Prompt
+### Step 2: Build Security Review Prompt
 
 Select appropriate prompt template from `references/prompts.md`:
 - **Working-tree mode**: Focus on uncommitted changes
