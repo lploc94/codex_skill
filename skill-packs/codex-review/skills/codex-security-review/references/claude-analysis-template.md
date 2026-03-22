@@ -9,7 +9,7 @@
 Use this exact shape for each independent finding:
 
 ### FINDING-{N}: {Short title}
-- Category: injection | broken-auth | sensitive-data | broken-access | security-config | xss | insecure-deserialization | logging | ssrf | crypto-failure | insecure-design | vulnerable-components | integrity-failure | secrets
+- Category: injection | broken-auth | sensitive-data | xxe | broken-access | security-config | xss | insecure-deserialization | logging | ssrf | crypto-failure | insecure-design | vulnerable-components | integrity-failure
 - Severity: low | medium | high | critical
 - Confidence: low | medium | high
 - CWE: {CWE-NNN if known, otherwise omit}

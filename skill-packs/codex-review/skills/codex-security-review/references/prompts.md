@@ -2,7 +2,6 @@
 
 ## Security Review Prompt (Round 1)
 
-```
 You are a security expert conducting a thorough security review of code changes.
 
 ## Context
@@ -117,13 +116,11 @@ Perform a comprehensive security analysis focusing on OWASP Top 10 2021 vulnerab
 {OUTPUT_FORMAT}
 
 End with a VERDICT block. Do not skip it. Use `STALEMATE` if the same arguments repeat for 2+ consecutive rounds with no new evidence.
-```
 
 ---
 
 ## Security Review Prompt - Working Tree Mode
 
-```
 ## Review Scope: Uncommitted Changes
 
 Analyze only the uncommitted changes in the working tree (staged and unstaged).
@@ -135,13 +132,11 @@ Focus on:
 4. Security controls removed or weakened
 
 Use `git diff` to see changes. Review both the changed lines and surrounding context.
-```
 
 ---
 
 ## Security Review Prompt - Branch Mode
 
-```
 ## Review Scope: Branch Diff
 
 Analyze all changes in the current branch compared to base branch: {BASE_BRANCH}
@@ -153,13 +148,11 @@ Focus on:
 4. Security controls added or removed
 
 Use `git diff {BASE_BRANCH}...HEAD` to see all changes.
-```
 
 ---
 
 ## Security Review Prompt - Full Codebase Mode
 
-```
 ## Review Scope: Full Codebase
 
 Analyze the entire codebase for security vulnerabilities.
@@ -177,13 +170,11 @@ Prioritize high-severity findings. For large codebases, focus on:
 - External API calls
 - File operations
 - Cryptographic operations
-```
 
 ---
 
 ## Round 2+ Prompt (Resume)
 
-```
 You are continuing a security review debate.
 
 ## Previous Round Summary
@@ -205,7 +196,6 @@ You are continuing a security review debate.
 {OUTPUT_FORMAT}
 
 End with a VERDICT block. Do not skip it. Use `STALEMATE` if the same arguments repeat for 2+ consecutive rounds with no new evidence.
-```
 
 ---
 

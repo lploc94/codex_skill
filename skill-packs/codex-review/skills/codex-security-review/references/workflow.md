@@ -572,7 +572,7 @@ while true; do
   case "$POLL" in POLL:running:*) sleep 15;; *) break;; esac
 done
 
-if grep -q "VERDICT: CONTINUE" "$SESSION_DIR/review.md" 2>/dev/null; then
+if grep -qE "VERDICT: (CONTINUE|STALEMATE)" "$SESSION_DIR/review.md" 2>/dev/null; then
   echo "❌ Security issues found. Commit blocked."
   echo "Run 'codex-security-review' for details."
   exit 1
