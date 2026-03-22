@@ -264,7 +264,6 @@ Advisory Issues (should fix, not blocking):
 
 ## Example: Complete Security Finding
 
-```
 ISSUE-1: SQL Injection in user search endpoint
 Category: injection
 Severity: critical
@@ -322,13 +321,11 @@ app.get('/api/users/search', async (req, res) => {
 2. Implement rate limiting on search endpoint
 3. Use prepared statements for all database queries
 4. Enable SQL query logging for security monitoring
-```
 
 ---
 
 ## Example: Secrets Detection
 
-```
 ISSUE-2: Hardcoded AWS credentials in configuration
 Category: sensitive-data
 Severity: critical
@@ -384,13 +381,11 @@ if (!AWS_CONFIG.accessKeyId || !AWS_CONFIG.secretAccessKey) {
 2. Use AWS Secrets Manager for production credentials
 3. Implement pre-commit hooks to detect secrets (e.g., git-secrets, truffleHog)
 4. Enable AWS GuardDuty for threat detection
-```
 
 ---
 
 ## Response Format (Round 2+)
 
-```
 RESPONSE-{N}: Re: ISSUE-{N}
 Action: accept | reject | revise
 Reason: [Response to rebuttal]
