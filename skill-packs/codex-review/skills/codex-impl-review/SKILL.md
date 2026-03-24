@@ -115,6 +115,8 @@ Report **specific activities** from `activities` array (e.g. "Codex [45s]: readi
 
 Continue while `status === "running"`. Stop on `completed|failed|timeout|stalled`.
 
+**Note**: `status === "completed"` means Codex finished its turn — it does NOT mean the debate is over. After `completed`, check the Loop Decision table to determine whether to continue or exit.
+
 ### 7. Apply/Rebut
 Parse issues from `poll_json.review.blocks[]` — each has `id`, `title`, `severity`, `category`, `location`, `problem`, `evidence`, `suggested_fix`. Verdict in `review.verdict.status`. Fallback: `review.raw_markdown`.
 
@@ -141,7 +143,20 @@ RENDER_EOF
 )
 ```
 
-Resume: `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"` → validate JSON. **Go back to step 6 (Poll).** Repeat 6→7→8 until APPROVE, stalemate, or 5 rounds.
+Resume: `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"` → validate JSON. **Go back to step 6 (Poll).**
+
+### Loop Decision (after each poll returns `status === "completed"`)
+
+`status === "completed"` means **Codex's turn is done** — NOT that the debate is over. You MUST check these conditions IN ORDER (first match wins):
+
+| # | Condition | Action |
+|---|-----------|--------|
+| 1 | `review.verdict.status === "APPROVE"` | **EXIT loop** → go to Completion step |
+| 2 | `poll_json.convergence.stalemate === true` | **EXIT loop** → go to Completion step (stalemate branch) |
+| 3 | Current round >= 5 | **EXIT loop** → go to Completion step (hard cap) |
+| 4 | `review.verdict.status === "REVISE"` or any open issues remain | **CONTINUE** → go back to Apply/Rebut step |
+
+**CRITICAL**: Do NOT exit the loop unless condition 1, 2, or 3 is met. If Codex returns REVISE, you MUST apply/rebut and resume.
 
 ### 9. Completion + Stalemate
 - `review.verdict.status === "APPROVE"` → done.

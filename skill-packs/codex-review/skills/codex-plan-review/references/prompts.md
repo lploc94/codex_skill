@@ -81,6 +81,7 @@ Read the updated plan file directly at: {PLAN_PATH}
 5. Focus on remaining open issues and any NEW findings from the updated plan.
 6. Maintain the same ISSUE-{N} numbering. New findings use the next available number.
 7. End with a VERDICT block.
+8. VERDICT rules: Return `APPROVE` ONLY if zero issues remain (all fixed or withdrawn). Return `REVISE` if ANY issue is still open or you found new issues. Claude will send another round if you return REVISE.
 
 ## Required Output Format
 {OUTPUT_FORMAT}

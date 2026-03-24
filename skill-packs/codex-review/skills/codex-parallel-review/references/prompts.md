@@ -98,7 +98,8 @@ You previously reviewed this codebase independently. Another reviewer (Claude) a
 1. For each of your disputed findings: accept Claude's rebuttal OR provide new evidence to defend.
 2. For each Claude-only finding: agree it is valid OR explain why you disagree.
 3. For contradictions: defend your position with evidence OR concede with reasoning.
-4. Use required output format exactly.
+4. For each response, use RESPONSE-{N} format with action: `accept`, `reject`, or `revise`. End with VERDICT: `CONSENSUS` only if all points resolved. `CONTINUE` if disputes remain. `STALEMATE` only if no new evidence to add. Claude will send another round if you return CONTINUE.
+5. Use required output format exactly.
 
 ## Required Output Format
 {OUTPUT_FORMAT}

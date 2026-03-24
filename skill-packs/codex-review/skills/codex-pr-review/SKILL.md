@@ -93,6 +93,8 @@ Report **specific activities** from `activities` array (e.g. "Codex [60s]: readi
 
 Continue while `status === "running"`. Stop on `completed|failed|timeout|stalled`.
 
+**Note**: `status === "completed"` means Codex finished its turn — it does NOT mean the debate is over. After `completed`, check the Loop Decision table to determine whether to continue or exit.
+
 ### 8. Cross-Analysis
 Parse `review.blocks` (each: `id`, `title`, `severity`, `category`, `location`, `problem`, `evidence`) and `review.overall_assessment` (code_quality, pr_description_accuracy, commit_hygiene, scope_appropriateness) from poll JSON. Verdict in `review.verdict.status`. Fallback: `review.raw_markdown`.
 
@@ -118,7 +120,20 @@ RENDER_EOF
 )
 ```
 
-Resume: `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"` → validate JSON. **Go back to step 7 (Poll).** Repeat 7→8→9 until CONSENSUS, STALEMATE, or 5 rounds.
+Resume: `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"` → validate JSON. **Go back to step 7 (Poll).**
+
+### Loop Decision (after each poll returns `status === "completed"`)
+
+`status === "completed"` means **Codex's turn is done** — NOT that the debate is over. Claude orchestration is authoritative for stop/continue. Check IN ORDER (first match wins):
+
+| # | Condition | Action |
+|---|-----------|--------|
+| 1 | Claude determines Full or Partial Consensus (no severity ≥ medium disagreements) | **EXIT loop** → go to Completion step |
+| 2 | `poll_json.convergence.stalemate === true` | **EXIT loop** → go to Completion step (stalemate branch) |
+| 3 | Current round >= 5 | **EXIT loop** → go to Completion step (hard cap) |
+| 4 | Disagreements remain with severity ≥ medium | **CONTINUE** → go back to Cross-Analysis step |
+
+**CRITICAL**: Do NOT exit the loop unless condition 1, 2, or 3 is met. Codex VERDICT is advisory — if Claude sees unresolved disagreements, MUST continue even if Codex says CONSENSUS.
 
 ### 10. Completion + Stalemate
 

@@ -75,6 +75,8 @@ Report **specific activities** from `activities` array (e.g. "Codex [90s]: resea
 
 Continue while `status === "running"`. Stop on `completed|failed|timeout|stalled`.
 
+**Note**: `status === "completed"` means Codex finished its turn — it does NOT mean the debate is over. After `completed`, check the Loop Decision table to determine whether to continue or exit.
+
 ### 6. Cross-Analysis
 
 **Capture baseline BEFORE this step** — see Step 6.5.
@@ -113,7 +115,20 @@ RENDER_EOF
 )
 printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"
 ```
-Validate JSON. Sandbox mode persists via thread — do NOT pass `--sandbox` on resume. **Go back to step 5 (Poll).** Repeat 5→6→6.5→7 until consensus, stalemate, or 5 rounds.
+Validate JSON. Sandbox mode persists via thread — do NOT pass `--sandbox` on resume. **Go back to step 5 (Poll).**
+
+### Loop Decision (after each poll returns `status === "completed"`)
+
+`status === "completed"` means **Codex's turn is done** — NOT that the debate is over. Check IN ORDER (first match wins):
+
+| # | Condition | Action |
+|---|-----------|--------|
+| 1 | Claude determines consensus (both sides converged, no significant disagreements) | **EXIT loop** → go to Completion step |
+| 2 | `poll_json.convergence.stalemate === true` or same disagreement set for 2 consecutive rounds | **EXIT loop** → go to Completion step (stalemate branch) |
+| 3 | Current round >= 5 | **EXIT loop** → go to Completion step (hard cap) |
+| 4 | Significant disagreements remain or new perspectives emerged | **CONTINUE** → go back to Cross-Analysis step |
+
+**CRITICAL**: Do NOT exit the loop unless condition 1, 2, or 3 is met. Codex `suggested_status` is advisory — override if evidence warrants continued debate.
 
 ### 8. Completion + Stalemate
 - `review.suggested_status === "CONSENSUS"` → done.

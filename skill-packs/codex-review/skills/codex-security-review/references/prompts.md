@@ -242,6 +242,7 @@ You are continuing a security review debate.
 2. Respond to rebuttals for disputed issues
 3. Identify any new security concerns introduced by fixes
 4. Update your verdict
+5. VERDICT rules: Return `APPROVE` ONLY if zero issues remain (all fixed or withdrawn). Return `REVISE` if ANY issue is still open or you found new issues. Claude will send another round if you return REVISE.
 
 ## Response Format
 

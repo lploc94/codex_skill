@@ -143,6 +143,8 @@ POLL_JSON=$(node "$RUNNER" poll "$SESSION_DIR")
 
 Report **specific activities** from `activities` array. NEVER report generic "Codex is running". Continue while `status === "running"`. Stop on `completed|failed|timeout|stalled`.
 
+**Note**: `status === "completed"` means Codex finished its turn — it does NOT mean the debate is over. After `completed`, check the Loop Decision table to determine whether to continue or exit.
+
 Collect results from all 4 background agents as they finish. **If an agent fails**: log error, continue with remaining agents' findings. Partial coverage is better than no coverage.
 
 ### 4. Merge Findings
@@ -176,6 +178,19 @@ RENDER_EOF
 printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"
 ```
 Validate JSON. **Go back to step 3 (Poll).** Parse `RESPONSE-{N}` blocks: `accept` → resolved, apply fix; `reject` with new evidence → reconsider; `revise` → evaluate modified position. Track per-finding resolution. Remove resolved items from next round. **Branch mode**: commit fixes before each resume.
+
+### Loop Decision (after each poll returns `status === "completed"`)
+
+`status === "completed"` means **Codex's turn is done** — NOT that the debate is over. Check IN ORDER:
+
+| # | Condition | Action |
+|---|-----------|--------|
+| 1 | All disputed/claude-only/codex-only findings resolved | **EXIT loop** → Final Report |
+| 2 | `poll_json.convergence.stalemate === true` | **EXIT loop** → Final Report (stalemate branch) |
+| 3 | Current round >= `MAX_ROUNDS` | **EXIT loop** → Final Report (round cap) |
+| 4 | Unresolved findings remain | **CONTINUE** → render debate prompt + resume |
+
+**CRITICAL**: Do NOT exit the loop unless condition 1, 2, or 3 is met.
 
 Exit: all resolved, round limit (`MAX_ROUNDS`), or `convergence.stalemate === true`.
 

@@ -145,6 +145,7 @@ You are reviewing a pull request independently. Codex is reviewing the same PR s
 4. Never edit files or run git add/commit/rebase/reset — use read-only inspection commands only.
 5. Keep ISSUE-{N} numbering stable. New findings use the next available number.
 6. Use EXACT output format. You MUST include a VERDICT block.
+7. Respond with RESPONSE-{N} blocks. End with VERDICT: `CONSENSUS` only if all disagreements resolved. `CONTINUE` if any point still disputed. `STALEMATE` only if you have no new evidence to add. Claude will send another round if you return CONTINUE.
 
 ## Required Output Format
 {OUTPUT_FORMAT}

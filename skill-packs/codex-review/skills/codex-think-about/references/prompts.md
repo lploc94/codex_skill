@@ -158,6 +158,7 @@ Address disagreements directly with evidence. Cite existing sources from Round 1
 Only attempt NEW web fetches if a specific challenged claim requires fresh evidence
 — limit to 2 new fetches maximum. If fetches fail, rely on existing research and
 reasoning. ALWAYS produce your full response even if network is unavailable.
+End with Suggested Status: `CONSENSUS` only if positions fully converged. `CONTINUE` if substantive disagreement remains with new evidence to present. `STALEMATE` only if no new ground to cover. Claude will send another round if you return CONTINUE.
 Respond in required output format.
 
 ## Required Output Format

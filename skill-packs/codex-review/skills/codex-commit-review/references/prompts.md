@@ -205,6 +205,7 @@ You are reviewing code changes independently. Codex is reviewing the same change
 3. Provide suggested fixes for agreed issues — NOT patches.
 4. Keep ISSUE-{N} numbering stable. New findings use the next available number.
 5. Use EXACT output format. You MUST include a VERDICT block.
+6. Respond with RESPONSE-{N} blocks. End with VERDICT: `CONSENSUS` only if all disagreements resolved. `CONTINUE` if any point still disputed. `STALEMATE` only if you have no new evidence to add. Claude will send another round if you return CONTINUE.
 
 ## Required Output Format
 {OUTPUT_FORMAT}
@@ -240,6 +241,7 @@ You are reviewing code changes independently. Codex is reviewing the same change
 4. Provide suggested fixes for agreed issues — NOT patches.
 5. Keep ISSUE-{N} numbering stable. New findings use the next available number.
 6. Use EXACT output format. You MUST include a VERDICT block.
+7. Respond with RESPONSE-{N} blocks. End with VERDICT: `CONSENSUS` only if all disagreements resolved. `CONTINUE` if any point still disputed. `STALEMATE` only if you have no new evidence to add. Claude will send another round if you return CONTINUE.
 
 ## Required Output Format
 {OUTPUT_FORMAT}
