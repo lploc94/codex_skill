@@ -92,7 +92,7 @@ These skills use `APPROVE`/`REVISE` verdict taxonomy. Codex decides; Claude fixe
 **If CONTINUE** — all 4 sub-steps are mandatory:
 1. **Categorize** each `review.blocks[]` issue as ACCEPT (valid) or DISPUTE (invalid with proof)
 2. **Fix** accepted issues — edit code or plan file. Record evidence of each fix
-3. **ALWAYS render rebuttal prompt** — template includes `FIXED_ITEMS` and `DISPUTED_ITEMS`. Even if all fixed, `DISPUTED_ITEMS` = `"None — all issues addressed"`
+3. **ALWAYS render rebuttal prompt** — template uses `SESSION_CONTEXT`, `FIXED_ITEMS`, `DISPUTED_ITEMS` (and `BASE_BRANCH` for branch mode). `USER_REQUEST` is NOT a rebuttal placeholder. Even if all fixed, `DISPUTED_ITEMS` = `"None — all issues addressed"`
 4. **ALWAYS resume** — `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"`. Then back to Poll
 
 ### Variant: Cross-Analysis (commit-review, pr-review)

@@ -59,11 +59,25 @@ Parse `review.blocks[]` (id, title, severity, category, location, problem, sugge
 | 2 | verdict === "APPROVE" | **EXIT** -> step 5 |
 | 3 | verdict === "REVISE" or open issues | **CONTINUE** -> sub-steps below |
 
-**If CONTINUE** — all 4 sub-steps are MANDATORY, even if you fix every issue:
-1. **Categorize** each `review.blocks[]` issue: ACCEPT (valid) or DISPUTE (invalid with concrete proof). Verify fixes (tests/typecheck).
-2. **Fix** accepted issues -> edit code, record evidence. Branch mode: commit fixes before resume. Invalid -> rebut with concrete proof.
-3. **ALWAYS render rebuttal** — template=`rebuttal-working-tree` or `rebuttal-branch`. Placeholders: `USER_REQUEST`, `SESSION_CONTEXT`, `FIXED_ITEMS`, `DISPUTED_ITEMS`, `BASE_BRANCH`. If all issues fixed, `DISPUTED_ITEMS` = `"None — all issues addressed"`. Rebuttal is NEVER skipped.
-4. **ALWAYS resume** — `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"`. Back to **Poll**. Codex MUST re-verify fixes and may find new issues.
+**If CONTINUE** — all sub-steps are MANDATORY, even if you fix every issue:
+
+**4a. Categorize + Fix**: For each `review.blocks[]` issue: ACCEPT (valid → fix code, verify) or DISPUTE (invalid → concrete proof). Branch mode: commit fixes before resume.
+
+**4b. Build rebuttal strings** (one line per issue):
+- `FIXED_ITEMS`: `"ISSUE-1: <title> — fixed in <file>:<line>\nISSUE-3: <title> — fixed in <file>:<line>"`
+- `DISPUTED_ITEMS`: `"ISSUE-2: <title> — <concrete reason>"` or `"None — all issues addressed"` if all fixed.
+
+**4c. Render + Resume** (reuse `SESSION_CONTEXT` from Step 1; `USER_REQUEST` is NOT a rebuttal placeholder):
+```bash
+# Working-tree: template=rebuttal-working-tree
+PROMPT=$(node "$RUNNER" render --skill codex-impl-review --template rebuttal-working-tree --skills-dir "$SKILLS_DIR" <<RENDER_EOF
+{"SESSION_CONTEXT":$(json_esc "$SESSION_CONTEXT"),"FIXED_ITEMS":$(json_esc "$FIXED_ITEMS"),"DISPUTED_ITEMS":$(json_esc "$DISPUTED_ITEMS")}
+RENDER_EOF
+)
+# Branch: template=rebuttal-branch, add "BASE_BRANCH":$(json_esc "$BASE_BRANCH")
+printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"
+```
+Back to **Poll**. Codex MUST re-verify fixes and may find new issues.
 
 ### 5. Completion + Output
 APPROVE -> done. Stalemate -> present deadlocked issues, ask user.

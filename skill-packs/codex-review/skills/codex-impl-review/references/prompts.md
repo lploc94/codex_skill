@@ -9,6 +9,8 @@
 | `{OUTPUT_FORMAT}` | Copy the entire fenced code block from `references/output-format.md` (the single block after "Use this exact shape") | Yes | — |
 | `{BASE_BRANCH}` | Base branch name (branch mode only) | Conditional | — |
 | `{REVIEW_SCOPE}` | Scope value for SESSION_CONTEXT fallback | No | `working-tree` or `branch diff against {BASE_BRANCH}` |
+| `{FIXED_ITEMS}` | Lines listing accepted+fixed issues (`ISSUE-N: title — fixed in file:line`) | No | "No issues fixed this round" |
+| `{DISPUTED_ITEMS}` | Lines listing disputed issues (`ISSUE-N: title — reason`) or "None — all issues addressed" | No | "None — all issues addressed" |
 
 ### SESSION_CONTEXT Schema
 
