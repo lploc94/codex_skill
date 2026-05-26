@@ -29,7 +29,7 @@ json_esc() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=
 - Runner manages all session state -- NEVER read/write session files manually.
 - **Information barrier**: Claude MUST complete independent analysis BEFORE reading Codex output.
 - **NEVER edit code or create commits** -- debate only.
-- For poll intervals and detailed error flows -> `Read references/protocol.md`
+- For detailed error flows -> `Read references/protocol.md`
 
 ## Workflow
 
@@ -49,7 +49,7 @@ Start: `printf '%s' "$PROMPT" | node "$RUNNER" start "$SESSION_DIR" --effort "$E
 Render: template=`claude-analysis`. Read diff, commits, file stats, PR description. Write FINDING-{N} per `references/claude-analysis-template.md`. Overall Assessment + Merge Readiness Pre-Assessment. COMPLETE before Step 4.
 
 ### 4. Poll -> Cross-Analysis -> Resume Loop
-Poll + report activities. (-> `references/protocol.md` for intervals)
+Poll + report activities.
 Parse `review.blocks[]` + `review.overall_assessment` (code_quality, pr_description_accuracy, commit_hygiene, scope_appropriateness). Fallback: `review.raw_markdown`.
 Compare Claude FINDING-{N} vs Codex ISSUE-{N}: Agreement, Disagreement, Claude-only, Codex-only, Same Direction Different Severity.
 Claude orchestration is authoritative -- Codex VERDICT is advisory.

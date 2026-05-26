@@ -26,7 +26,7 @@ json_esc() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=
 - Errors: `failed`->retry once, still fails->skip chunk. >50% failed->warn user. `timeout`->report partial. `stalled`+recoverable->`stop`->recovery `resume`->poll; not recoverable->report partial. Cleanup sequencing: `finalize`+`stop` ONLY after recovery resolves.
 - Cleanup: ALWAYS `finalize` + `stop` ALL tracked sessions, even on failure/timeout.
 - Runner manages all session state -- NEVER read/write session files manually.
-- For poll intervals and detailed error flows -> `Read references/protocol.md`
+- For detailed error flows -> `Read references/protocol.md`
 
 ## Workflow
 
@@ -48,7 +48,7 @@ Order: config/types first -> core/utils -> features -> tests last. Present chunk
 Track: `ALL_SESSION_DIRS=()`. For each chunk (sequential or parallel batches):
 4a) Init: `node "$RUNNER" init --skill-name codex-codebase-review --working-dir "$PWD"`. Track session.
 4b) Render: template=`chunk-review`. Placeholders: `PROJECT_TYPE`, `CHUNK_NAME`, `FOCUS_AREAS`, `FILE_LIST`, `CONTEXT_SUMMARY`.
-4c) Start + 4d) Poll (-> `references/protocol.md` for intervals). Report: "Chunk {N}/{TOTAL} [{name}]".
+4c) Start + 4d) Poll. Report: "Chunk {N}/{TOTAL} [{name}]".
 4e) Parse `review.blocks[]`. 4f) Context propagation: high/critical findings (~2000 tokens cap).
 4g) Progress report. 4h) Finalize chunk.
 Parallel mode: batch by parallel_factor, start all simultaneously, poll round-robin, propagate context between batches only.

@@ -28,7 +28,7 @@ json_esc() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=
 - Cleanup: ALWAYS run `finalize` + `stop`, even on failure/timeout.
 - Runner manages all session state -- NEVER read/write session files manually.
 - **Information barrier**: Claude MUST complete independent analysis BEFORE reading Codex output.
-- For poll intervals and detailed error flows -> `Read references/protocol.md`
+- For detailed error flows -> `Read references/protocol.md`
 
 ## Workflow
 
@@ -45,7 +45,7 @@ Start: `printf '%s' "$PROMPT" | node "$RUNNER" start "$SESSION_DIR" --effort "$E
 Render template=`claude-analysis`, same placeholders. Analyze using own knowledge. MAY use MCP tools (web_search, context7). Analysis must be COMPLETE and FINAL before Step 4.
 
 ### 4. Poll -> Cross-Analysis -> Resume Loop
-Poll: `node "$RUNNER" poll "$SESSION_DIR"`. Report activities. (-> `references/protocol.md` for intervals)
+Poll: `node "$RUNNER" poll "$SESSION_DIR"`. Report activities.
 Parse `review.insights`, `review.considerations`, `review.recommendations`, `review.sources`. Fallback: `review.raw_markdown`.
 Classify: Genuine Agreement, Genuine Disagreement, Claude-only Insight, Codex-only Insight, Same Direction Different Depth.
 Build response: Agreements, Disagreements (defend with evidence), New Perspectives, Source Cross-validation.

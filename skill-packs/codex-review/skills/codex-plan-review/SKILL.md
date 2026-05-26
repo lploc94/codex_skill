@@ -27,7 +27,7 @@ json_esc() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=
 - Errors: `failed`->retry once (re-poll 15s). `timeout`->report partial, suggest lower effort. `stalled`+recoverable->`stop`->recovery `resume`->poll; not recoverable->report partial. Cleanup sequencing: `finalize`+`stop` ONLY after recovery resolves.
 - Cleanup: ALWAYS run `finalize` + `stop`, even on failure/timeout.
 - Runner manages all session state -- NEVER read/write session files manually.
-- For poll intervals and detailed error flows -> `Read references/protocol.md`
+- For detailed error flows -> `Read references/protocol.md`
 
 ## Workflow
 
@@ -47,7 +47,7 @@ Start: `printf '%s' "$PROMPT" | node "$RUNNER" start "$SESSION_DIR" --effort "$E
 
 ### 4. Poll -> Check Verdict -> Apply/Rebut -> Resume Loop
 
-Poll: `node "$RUNNER" poll "$SESSION_DIR"`. Report specific activities. (-> `references/protocol.md` for intervals)
+Poll: `node "$RUNNER" poll "$SESSION_DIR"`. Report specific activities.
 Parse `review.blocks[]` (id, title, severity, category, problem, suggested_fix). Verdict in `review.verdict.status`.
 
 **Check stalemate FIRST, then verdict** (-> `references/protocol.md` § Debate Loop Protocol):

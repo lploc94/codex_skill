@@ -39,16 +39,7 @@ Validate JSON. Sandbox mode persists via thread -- do NOT pass `--sandbox` on re
 ```bash
 POLL_JSON=$(node "$RUNNER" poll "$SESSION_DIR")
 ```
-**Intervals by effort** (Round 1):
-
-| Effort | Round 1 schedule | Round 2+ |
-|--------|-----------------|----------|
-| low | 120s, 60s, 30s+ | 30s, 15s+ |
-| medium | 120s, 60s, 60s, 30s+ | 30s, 15s+ |
-| high | 120s, 60s, 60s, 60s, 30s+ | 30s, 15s+ |
-| xhigh | 120s, 60s, 60s, 60s, 60s, 30s+ | 30s, 15s+ |
-
-First poll at 120s gives Codex bootstrap time regardless of effort. Higher effort = more 60s intervals before dropping to 30s.
+The runner handles throttling internally (default 120s min-interval between polls). Just call poll — if called too soon, it blocks until the interval elapses or Codex finishes (whichever comes first). No sleep needed between calls.
 
 Report **specific activities** from `activities` array (e.g. "Codex [45s]: reading src/auth.js"). NEVER report generic "Codex is running".
 

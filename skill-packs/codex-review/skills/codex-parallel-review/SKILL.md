@@ -27,7 +27,7 @@ json_esc() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=
 - Errors: `failed`->retry once (re-poll 15s). `timeout`->report partial, suggest lower effort. `stalled`+recoverable->`stop`->recovery `resume`->poll; not recoverable->report partial. Cleanup sequencing: `finalize`+`stop` ONLY after recovery resolves.
 - Cleanup: ALWAYS run `finalize` + `stop`, even on failure/timeout.
 - Runner manages all session state -- NEVER read/write session files manually.
-- For poll intervals and detailed error flows -> `Read references/protocol.md`
+- For detailed error flows -> `Read references/protocol.md`
 
 ## Workflow
 
@@ -49,7 +49,7 @@ Start: `printf '%s' "$PROMPT" | node "$RUNNER" start "$SESSION_DIR" --effort "$E
 Each writes FINDING-{N} with Category, Severity, File, Location, Problem, Suggested fix.
 
 ### 3. Poll Codex + Collect Agent Results
-Poll Codex (-> `references/protocol.md` for intervals). Collect agent results as they finish. If agent fails, continue with remaining.
+Poll Codex. Collect agent results as they finish. If agent fails, continue with remaining.
 
 ### 4. Merge Findings
 4a) Deduplicate Claude findings across agents -- same file + overlapping lines -> keep higher severity.

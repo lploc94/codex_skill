@@ -27,7 +27,7 @@ json_esc() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=
 - Errors: `failed`->retry once (re-poll 15s). `timeout`->report partial, suggest lower effort. `stalled`+recoverable->`stop`->recovery `resume`->poll; not recoverable->report partial. Cleanup sequencing: `finalize`+`stop` ONLY after recovery resolves.
 - Cleanup: ALWAYS run `finalize` + `stop`, even on failure/timeout.
 - Runner manages all session state -- NEVER read/write session files manually.
-- For poll intervals and detailed error flows -> `Read references/protocol.md`
+- For detailed error flows -> `Read references/protocol.md`
 
 ## Workflow
 
@@ -45,7 +45,7 @@ Render (nested): First render scope template (`working-tree`/`branch`/`full`) wi
 Start: `printf '%s' "$PROMPT" | node "$RUNNER" start "$SESSION_DIR" --effort "$EFFORT"`
 
 ### 4. Poll -> Apply/Rebut -> Resume Loop
-Poll + report activities. (-> `references/protocol.md` for intervals)
+Poll + report activities.
 Parse `review.blocks[]` (id, title, severity, category, confidence, cwe, owasp, problem, evidence, attack_vector, suggested_fix). Risk summary in `review.verdict.risk_summary`. Fallback: `review.raw_markdown`.
 Present grouped by severity (Critical->High->Medium->Low). Critical/High=blocking; Medium/Low=advisory.
 - Valid -> fix vulnerabilities, verify fixes.

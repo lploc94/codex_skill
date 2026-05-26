@@ -1657,7 +1657,19 @@ function cmdPoll(argv) {
     return EXIT_ERROR;
   }
 
-  const { dir: stateDir, err } = validateStateDir(stateDirArg);
+  // Parse --min-interval flag (default 120s)
+  let minInterval = 120;
+  const filteredArgv = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--min-interval" && i + 1 < argv.length) {
+      minInterval = parseInt(argv[++i], 10);
+      if (isNaN(minInterval) || minInterval < 0) minInterval = 120;
+    } else {
+      filteredArgv.push(argv[i]);
+    }
+  }
+
+  const { dir: stateDir, err } = validateStateDir(filteredArgv[0] || stateDirArg);
   if (err) {
     jsonError(err, "INVALID_INPUT");
     return EXIT_ERROR;
@@ -1670,6 +1682,35 @@ function cmdPoll(argv) {
     process.stdout.write(cached);
     if (!cached.endsWith("\n")) process.stdout.write("\n");
     return EXIT_SUCCESS;
+  }
+
+  // Throttle: wait until min-interval elapsed OR process completes
+  if (minInterval > 0) {
+    const stateFile = path.join(stateDir, "state.json");
+    try {
+      const s = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+      const lastPoll = s.last_poll_at || 0;
+      const now = Math.floor(Date.now() / 1000);
+      const remaining = minInterval - (now - lastPoll);
+      if (remaining > 0 && lastPoll > 0) {
+        // Sleep in 2s increments, check for completion each iteration
+        let waited = 0;
+        while (waited < remaining) {
+          const chunk = Math.min(2000, (remaining - waited) * 1000);
+          syncSleep(chunk);
+          waited += chunk / 1000;
+          // Early exit if process completed (final.txt appeared)
+          if (fs.existsSync(finalFile)) {
+            const cached = fs.readFileSync(finalFile, "utf8");
+            process.stdout.write(cached);
+            if (!cached.endsWith("\n")) process.stdout.write("\n");
+            return EXIT_SUCCESS;
+          }
+        }
+      }
+    } catch {
+      // state.json unreadable — proceed without throttle
+    }
   }
 
   // Read state
@@ -2143,7 +2184,7 @@ function main() {
         "  node codex-runner.js init --skill-name <name> --working-dir <dir>\n" +
         "  echo PROMPT | node codex-runner.js start <session_dir> [--effort <level>] [--timeout <s>] [--sandbox <mode>]\n" +
         "  echo PROMPT | node codex-runner.js resume <session_dir> [--effort <level>] [--timeout <s>]\n" +
-        "  node codex-runner.js poll <session_dir>\n" +
+        "  node codex-runner.js poll <session_dir> [--min-interval <s>]\n" +
         "  node codex-runner.js stop <session_dir>\n" +
         "  echo JSON | node codex-runner.js finalize <session_dir>\n" +
         "  node codex-runner.js status <session_dir>\n" +
