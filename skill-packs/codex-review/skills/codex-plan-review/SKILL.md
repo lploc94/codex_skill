@@ -6,7 +6,7 @@ description: Review/debate plans before implementation between Claude Code and C
 # Codex Plan Review
 
 ## Purpose
-Adversarially review a plan before implementation starts.
+Adversarially review a plan before implementation to **maximize its chance of achieving the stated target**. Validate achievability, catch technology/capability hallucinations (steps that look like they solve the problem but don't), fix logic/design flaws, bad practices, and pattern violations, and fill missing steps. Propose additions ONLY when required to reach the target — no over-engineering, no gold-plating.
 
 ## When to Use
 After creating a plan, before implementing code.

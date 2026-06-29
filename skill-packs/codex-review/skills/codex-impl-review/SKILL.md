@@ -1,12 +1,12 @@
 ---
 name: codex-impl-review
-description: Review uncommitted code changes or branch diff. Claude applies valid fixes, rebuts invalid points, iterates until consensus or stalemate.
+description: Review uncommitted code changes or branch diff against the plan/target — verify correctness, catch unacceptable deviations and bugs (logic/security/memory/runtime). No new features or over-engineering beyond the plan. Claude applies valid fixes, rebuts invalid points, iterates until consensus or stalemate.
 ---
 
 # Codex Implementation Review
 
 ## Purpose
-Adversarial review on uncommitted changes before commit, or branch changes before merge.
+Verify the implementation matches the plan / original target before commit or merge. Check what is missing, what deviates (and whether the deviation is acceptable or breaks the target), and hunt for real bugs (logic, security, memory, runtime). Do NOT propose new features or concepts outside the plan — the only exception is fixing genuine security vulnerabilities or runtime errors. No over-engineering.
 
 ## When to Use
 After writing code, before committing. For security-sensitive code, run `/codex-security-review` alongside.
