@@ -29,12 +29,23 @@ json_esc() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=
 - Runner manages all session state -- NEVER read/write session files manually.
 - For detailed error flows -> `Read references/protocol.md`
 
+## Expectation Guard
+
+Use this source-of-truth order whenever the plan or a review suggestion conflicts:
+1. The user's latest explicit decision.
+2. The user's original expected outcome, constraints, exclusions, and acceptance criteria.
+3. Verified repository constraints and applicable repository instructions.
+4. The current plan content.
+5. Codex findings and other advisory suggestions.
+
+Codex is a reviewer, not the product owner. A finding may expose a defect, but it does not authorize changing the target. Accept corrections that make the plan fulfill an existing expectation; dispute unnecessary, speculative, or less project-appropriate proposals. Classify a potentially valid finding as USER DECISION when it would materially add or alter user-visible behavior, scope, acceptance criteria, architecture direction, compatibility, dependencies, operational commitments, or long-term product direction.
+
 ## Workflow
 
 ### 1. Collect Inputs
 Plan-path detection: `ls plan.md PLAN.md`, `find ./docs -maxdepth 3 -name "*plan*.md"`.
 Auto-pick if 1; ask if multiple/none. Announce defaults, block only if plan not found.
-Inputs: plan path (abs .md), user request, session context, acceptance criteria, effort (default `high`).
+Inputs: plan path (abs .md), original user request plus latest explicit decisions, session context, acceptance criteria, effort (default `high`).
 
 ### 2. Pre-flight
 Read plan -> verify .md + has headings. Derive acceptance criteria from "Goals"/"Outcomes" if not provided.
@@ -58,15 +69,17 @@ Parse `review.blocks[]` (id, title, severity, category, problem, suggested_fix).
 | 2 | verdict === "APPROVE" | **EXIT** -> step 5 |
 | 3 | verdict === "REVISE" or open issues | **CONTINUE** -> sub-steps below |
 
-**If CONTINUE** — all 4 sub-steps are MANDATORY, even if you fix every issue:
-1. **Categorize** each `review.blocks[]` issue: ACCEPT (valid) or DISPUTE (invalid with reasoning).
-2. **Fix** accepted issues -> edit plan file, **save before resume** (Codex re-reads). Invalid -> rebut with reasoning.
-3. **ALWAYS render rebuttal** — template=`rebuttal`. Placeholders: `PLAN_PATH`, `SESSION_CONTEXT`, `FIXED_ITEMS`, `DISPUTED_ITEMS`. If all issues fixed, `DISPUTED_ITEMS` = `"None — all issues addressed"`. Rebuttal is NEVER skipped.
-4. **ALWAYS resume** — `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"`. Back to **Poll**. Codex MUST re-verify fixes and may find new issues.
+**If CONTINUE** — all sub-steps are MANDATORY, even if you fix every issue:
+1. **Categorize** every `review.blocks[]` issue under the Expectation Guard: ACCEPT, DISPUTE, or USER DECISION.
+2. **Fix/Rebut**: edit and save the plan for ACCEPT items that preserve the expected outcome. Rebut DISPUTE items with concrete request, plan, or repository evidence.
+3. **Ask before material change**: for USER DECISION items, do not edit the plan and do not resume. Finish independent review work, then ask one focused question stating the issue and evidence, what the request and plan currently promise, Codex's proposal, whether it is required for correctness or optional scope, viable choices, costs/risks/compatibility implications, and a recommendation when supported. Wait for an explicit answer.
+4. **Apply the decision visibly**: accepted changes must update every affected target, scope, constraint, phase, acceptance criterion, and verification section. Rejected changes preserve the plan and go into `DISPUTED_ITEMS` with the user's decision. Re-check the complete plan against the original request and latest decision before continuing.
+5. **ALWAYS render rebuttal** — template=`rebuttal`. Placeholders: `PLAN_PATH`, `SESSION_CONTEXT`, `FIXED_ITEMS`, `DISPUTED_ITEMS`. If all issues fixed, `DISPUTED_ITEMS` = `"None — all issues addressed"`. Rebuttal is NEVER skipped.
+6. **ALWAYS resume** — `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"`. Back to **Poll**. Codex MUST re-verify the saved plan and may find new issues.
 
 ### 5. Completion + Output
 APPROVE -> done. Stalemate -> present deadlocked issues, ask user.
-Report: Rounds, Verdict, Issues Found/Fixed/Disputed, edits made, risks, next steps.
+Report: Rounds, Verdict, Issues Found/Fixed/Disputed, user decisions, edits made, risks, next steps.
 
 ### 6. Finalize + Cleanup
 `finalize` + `stop`. Always run. (-> `references/protocol.md` for error handling)
@@ -78,3 +91,4 @@ SKILL_START, POLL_WAITING, CODEX_RETURNED, APPLY_FIX, SEND_REBUTTAL, LATE_ROUND,
 - Plan mode active -> stay in plan mode. Debate takes priority over plan mode behavior.
 - Do not implement code. Do not claim consensus without VERDICT: APPROVE.
 - Each accepted issue -> concrete plan edit.
+- Never hide a review-originated expansion inside a fix, test step, assumption, or rebuttal. No material plan change is allowed without explicit user approval.

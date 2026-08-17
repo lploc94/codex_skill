@@ -80,11 +80,12 @@ These skills use `APPROVE`/`REVISE` verdict taxonomy. Codex decides; Claude fixe
 | 2 | `review.verdict.status === "APPROVE"` | **EXIT** → Finalize |
 | 3 | `review.verdict.status === "REVISE"` or open issues remain | **CONTINUE** → sub-steps below |
 
-**If CONTINUE** — all 4 sub-steps are mandatory:
-1. **Categorize** each `review.blocks[]` issue as ACCEPT (valid) or DISPUTE (invalid with proof)
-2. **Fix** accepted issues — edit code or plan file. Record evidence of each fix
-3. **ALWAYS render rebuttal prompt** — template uses `SESSION_CONTEXT`, `FIXED_ITEMS`, `DISPUTED_ITEMS` (and `BASE_BRANCH` for branch mode). `USER_REQUEST` is NOT a rebuttal placeholder. Even if all fixed, `DISPUTED_ITEMS` = `"None — all issues addressed"`
-4. **ALWAYS resume** — `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"`. Then back to Poll
+**If CONTINUE** — all 5 sub-steps are mandatory:
+1. **Categorize** each `review.blocks[]` issue as ACCEPT (valid within the approved target), DISPUTE (invalid with proof), or USER DECISION (potentially valid but materially changes user-owned scope or intent)
+2. **Fix** accepted issues — edit code or plan file and record evidence of each fix. Rebut disputed issues with request, plan, repository, or test evidence
+3. **Pause for USER DECISION** — do not make the material change, render a rebuttal, or resume until the user explicitly decides. Present the current promise, proposed change, evidence, whether it is required for correctness or optional scope, viable choices, tradeoffs, and a recommendation when supported
+4. **ALWAYS render rebuttal prompt after all decisions resolve** — template uses `SESSION_CONTEXT`, `FIXED_ITEMS`, `DISPUTED_ITEMS` (and `BASE_BRANCH` for branch mode). `USER_REQUEST` is NOT a rebuttal placeholder. Even if all fixed, `DISPUTED_ITEMS` = `"None — all issues addressed"`
+5. **ALWAYS resume** — `printf '%s' "$PROMPT" | node "$RUNNER" resume "$SESSION_DIR" --effort "$EFFORT"`. Then back to Poll
 
 ### Variant: Cross-Analysis (commit-review, pr-review)
 

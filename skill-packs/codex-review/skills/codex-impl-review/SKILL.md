@@ -6,7 +6,7 @@ description: Review uncommitted code changes or branch diff against the plan/tar
 # Codex Implementation Review
 
 ## Purpose
-Verify the implementation matches the plan / original target before commit or merge. Check what is missing, what deviates (and whether the deviation is acceptable or breaks the target), and hunt for real bugs (logic, security, memory, runtime). Do NOT propose new features or concepts outside the plan — the only exception is fixing genuine security vulnerabilities or runtime errors. No over-engineering.
+Verify the implementation matches the plan / original target before commit or merge. Check what is missing, what deviates (and whether the deviation is acceptable or breaks the target), and hunt for real bugs (logic, security, memory, runtime). Fix genuine defects required to make the promised behavior correct and safe, but do NOT silently turn a defect fix into a new product contract, feature, or broader design. No over-engineering.
 
 ## When to Use
 After writing code, before committing. For security-sensitive code, run `/codex-security-review` alongside.
@@ -30,13 +30,24 @@ json_esc() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=
 - Runner manages all session state -- NEVER read/write session files manually.
 - For detailed error flows -> `Read references/protocol.md`
 
+## Intent And Plan Guard
+
+Use this source-of-truth order whenever instructions, implementation choices, or review suggestions conflict:
+1. The user's latest explicit decision.
+2. The original expected outcome and the approved plan's target, scope, invariants, and acceptance criteria.
+3. Verified repository constraints and applicable repository instructions.
+4. The implementation under review.
+5. Codex findings and other advisory suggestions.
+
+Codex is a reviewer, not the product owner. A genuine in-target bug may be fixed autonomously even when its exact edge case was not named, provided the fix is necessary for the promised behavior and creates no material new contract. A review-driven change requires a USER DECISION when it would materially add or alter user-visible behavior, commands, APIs, configuration, schemas, persistence, migrations, compatibility, supported platforms or use cases, dependencies, services, operations, architecture direction, or long-term product scope.
+
 ## Workflow
 
 ### 1. Collect Inputs
 Scope: working-tree (staged/unstaged changes) or branch (diff vs base). Auto-detect via `git status --short` and `git rev-list @{u}..HEAD`.
 Effort: <10 files=`medium`, 10-50=`high`, >50=`xhigh`. Announce defaults.
-Working-tree inputs: working dir, user request, uncommitted changes.
-Branch inputs: base branch (validate `git rev-parse --verify`), clean working tree required, branch diff + commit log.
+Working-tree inputs: working dir, original user request plus latest explicit decisions, approved plan/target when available, uncommitted changes.
+Branch inputs: base branch (validate `git rev-parse --verify`), clean working tree required, original user request plus latest explicit decisions, approved plan/target when available, branch diff + commit log.
 
 ### 2. Pre-flight
 Working-tree: `git diff --quiet && git diff --cached --quiet` must FAIL. Branch: `git diff <base>...HEAD --quiet` must FAIL.
@@ -61,13 +72,20 @@ Parse `review.blocks[]` (id, title, severity, category, location, problem, sugge
 
 **If CONTINUE** — all sub-steps are MANDATORY, even if you fix every issue:
 
-**4a. Categorize + Fix**: For each `review.blocks[]` issue: ACCEPT (valid → fix code, verify) or DISPUTE (invalid → concrete proof). Branch mode: commit fixes before resume.
+**4a. Categorize**: Classify every `review.blocks[]` issue under the Intent And Plan Guard:
+- ACCEPT: a real defect or unacceptable deviation within the approved target. Fix the root cause and verify it. Branch mode: commit fixes before resume.
+- DISPUTE: style preference, optional polish, speculative infrastructure, unrelated cleanup, unnecessary abstraction, new feature, or broader redesign without a concrete in-target correctness need. Rebut with plan, request, code, test, or repository evidence.
+- USER DECISION: a potentially valid proposal that materially changes a user-owned outcome or contract. Do not make that change yet.
 
-**4b. Build rebuttal strings** (one line per issue):
+**4b. Resolve USER DECISION items before resume**: Finish independent fixes, then ask one focused question stating the issue and evidence, the current target/plan promise, Codex's proposal, whether it is required for correctness or optional scope, viable choices, costs/risks/compatibility implications, and a recommendation when supported. Do not edit code or resume for that item until the user explicitly decides.
+
+If accepted, update the plan/target, affected constraints, tests, acceptance criteria, and `SESSION_CONTEXT` visibly, then continue implementation and the current review loop. If rejected, preserve the target and rebut Codex with the user's decision. If a defect cannot be fixed without creating a material new contract, it is a USER DECISION, not an autonomous fix.
+
+**4c. Build rebuttal strings** (one line per issue):
 - `FIXED_ITEMS`: `"ISSUE-1: <title> — fixed in <file>:<line>\nISSUE-3: <title> — fixed in <file>:<line>"`
 - `DISPUTED_ITEMS`: `"ISSUE-2: <title> — <concrete reason>"` or `"None — all issues addressed"` if all fixed.
 
-**4c. Render + Resume** (reuse `SESSION_CONTEXT` from Step 1; `USER_REQUEST` is NOT a rebuttal placeholder):
+**4d. Render + Resume** (reuse the updated `SESSION_CONTEXT`; `USER_REQUEST` is NOT a rebuttal placeholder):
 ```bash
 # Working-tree: template=rebuttal-working-tree
 PROMPT=$(node "$RUNNER" render --skill codex-impl-review --template rebuttal-working-tree --skills-dir "$SKILLS_DIR" <<RENDER_EOF
@@ -81,7 +99,7 @@ Back to **Poll**. Codex MUST re-verify fixes and may find new issues.
 
 ### 5. Completion + Output
 APPROVE -> done. Stalemate -> present deadlocked issues, ask user.
-Report: Rounds, Verdict, Issues Found/Fixed/Disputed, fixed defects by severity, residual risks, next steps.
+Report: Rounds, Verdict, Issues Found/Fixed/Disputed, user decisions, fixed defects by severity, residual risks, next steps.
 
 ### 6. Finalize + Cleanup
 `finalize` + `stop`. Always run. (-> `references/protocol.md` for error handling)
@@ -91,5 +109,6 @@ SKILL_START, POLL_WAITING, CODEX_RETURNED, APPLY_FIX, SEND_REBUTTAL, LATE_ROUND,
 
 ## Rules
 - If in plan mode, exit plan mode first -- this skill requires code editing.
-- Codex reviews only; it does not edit files. Preserve functional intent unless fix requires behavior change.
+- Codex reviews only; it does not edit files. Preserve the approved target and ask before any material behavior or contract change.
 - Every accepted issue -> concrete code diff.
+- Never hide review-originated scope expansion inside a bug fix, test adjustment, helper refactor, dependency change, or reviewer rebuttal.
