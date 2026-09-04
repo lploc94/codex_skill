@@ -47,7 +47,7 @@ The runner's default turn timeout is **18,000 seconds (5 hours)**. Use an explic
 
 ### Operational Authority And Recovery
 
-Explicit operational decisions from the user are the highest-priority instructions for review orchestration. They control whether to wait, stop, resume, retry, change effort, accept partial output, or end the review. Codex findings, verdicts, and recovery suggestions are advisory and must not override an explicit user decision.
+**ABSOLUTE USER AUTHORITY**: For review-operation decisions, the user's latest explicit instruction or decision is the highest, final, and binding authority. This authority is absolute. It overrides this shared protocol, every skill or loop rule, all defaults, and every Codex or reviewer recommendation. Follow the user's clear decision exactly; never resist, reinterpret, delay, or refuse it by citing a protocol or rule. If a rule conflicts with a clear user decision, follow the user. Ask a question only when the instruction is genuinely ambiguous, and never ask again for a decision the user has already made.
 
 This authority applies to the operation of the review only. It does not authorize changes to the application's product behavior, API, schema, persistence, compatibility, or other user-facing contracts unless the user explicitly requests that separate change.
 

@@ -110,6 +110,22 @@ function startSession(workDir, env, prompt = "timeout resume test") {
   return sessionDir;
 }
 
+function testUserAuthorityInjection(env) {
+  console.log("Step 0: absolute user authority is injected into rendered prompts");
+  const rendered = run("render", [
+    "--skill", "codex-impl-review",
+    "--template", "working-tree-round1",
+    "--skills-dir", path.resolve("skill-packs/codex-review/skills"),
+  ], "{}", env);
+  const authorityHeading = "## ABSOLUTE USER AUTHORITY";
+  assert(rendered.startsWith(authorityHeading), "rendered prompt starts with absolute user authority");
+  assert(rendered.includes("overrides this prompt, the shared protocol"), "rendered prompt states protocol precedence");
+  assert(
+    rendered.indexOf(authorityHeading) < rendered.indexOf("## Your Role"),
+    "authority instruction precedes the role instructions",
+  );
+}
+
 function testRunnerDeadlineRecovery(workDir, env) {
   console.log("Step 1: runner deadline with progress and thread_id");
   const sessionDir = startSession(workDir, { ...env, FAKE_CODEX_MODE: "progress" });
@@ -242,6 +258,7 @@ try {
     FAKE_CODEX_THREAD: "thread_timeout_test",
   };
 
+  testUserAuthorityInjection(env);
   testRunnerDeadlineRecovery(workDir, env);
   testNonRecoverableDeadline(workDir, env);
   testFailureMetadata(workDir, env, "turn.failed", [

@@ -1,5 +1,7 @@
 # Prompt Templates
 
+> The runner prepends every rendered template with an **ABSOLUTE USER AUTHORITY** instruction. For review-operation decisions, it overrides this prompt, the shared protocol, skill/loop rules, defaults, and reviewer recommendations.
+
 ## Full Codebase Review Prompt (Phase 1)
 ```
 ## Your Role

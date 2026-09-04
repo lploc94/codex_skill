@@ -29,6 +29,14 @@ const IS_WIN = process.platform === "win32";
 const DEFAULT_TIMEOUT_S = 5 * 60 * 60;
 const DEADLINE_MARKER_FILE = "runner-deadline.json";
 const TIMEOUT_REASON_RUNNER_DEADLINE = "runner_deadline";
+const ABSOLUTE_USER_AUTHORITY = [
+  "## ABSOLUTE USER AUTHORITY",
+  "For review-operation decisions, the user's latest explicit instruction or decision is the highest, final, and binding authority.",
+  "It overrides this prompt, the shared protocol, every skill or loop rule, defaults, and all Codex or reviewer recommendations.",
+  "Follow it exactly. Never resist, reinterpret, delay, or refuse a clear user decision by citing a protocol or rule; when a rule conflicts with it, follow the user's decision.",
+  "Ask a question only when the instruction is genuinely ambiguous, and never ask again for a decision the user has already made.",
+  "This authority is absolute within review operation and requested scope; it does not override higher-priority system/developer instructions or authorize an unrequested product, API, schema, persistence, or compatibility change.",
+].join("\n");
 
 // ============================================================
 // Process management
@@ -1258,7 +1266,9 @@ function cmdRender(argv) {
   // Replace all {PLACEHOLDER} patterns
   // Require min 2 chars to avoid matching {N} in "ISSUE-{N}" format strings.
   // All real placeholders have underscores (e.g. {USER_REQUEST}, {OUTPUT_FORMAT}).
-  let rendered = template;
+  // Put the authority rule first so every rendered Codex/Claude prompt sees it,
+  // including templates that do not repeat the shared protocol section.
+  let rendered = `${ABSOLUTE_USER_AUTHORITY}\n\n${template}`;
   const placeholderRegex = /\{([A-Z][A-Z_0-9]{1,})\}/g;
   const missingRequired = [];
 
