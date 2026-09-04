@@ -26,6 +26,9 @@ const EXIT_STALLED = 4;
 const EXIT_CODEX_NOT_FOUND = 5;
 
 const IS_WIN = process.platform === "win32";
+const DEFAULT_TIMEOUT_S = 5 * 60 * 60;
+const DEADLINE_MARKER_FILE = "runner-deadline.json";
+const TIMEOUT_REASON_RUNNER_DEADLINE = "runner_deadline";
 
 // ============================================================
 // Process management
@@ -296,10 +299,10 @@ function verifyWatchdog(pid) {
   return "mismatch";
 }
 
-function launchWatchdog(timeoutS, targetPid) {
+function launchWatchdog(timeoutS, targetPid, stateDir, round) {
   const script = path.resolve(__filename);
   const nodeExe = process.execPath;
-  const args = [script, "_watchdog", String(timeoutS), String(targetPid)];
+  const args = [script, "_watchdog", String(timeoutS), String(targetPid), stateDir, String(round)];
 
   const spawnOpts = {
     stdio: "ignore",
@@ -328,6 +331,42 @@ function atomicWrite(filepath, content) {
     try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
     throw err;
   }
+}
+
+function deadlineMarkerPath(stateDir) {
+  return path.join(stateDir, DEADLINE_MARKER_FILE);
+}
+
+function clearDeadlineMarker(stateDir) {
+  try { fs.unlinkSync(deadlineMarkerPath(stateDir)); } catch {}
+}
+
+function writeDeadlineMarker(stateDir, timeoutS, round) {
+  atomicWrite(deadlineMarkerPath(stateDir), JSON.stringify({
+    reason: TIMEOUT_REASON_RUNNER_DEADLINE,
+    timeout_seconds: timeoutS,
+    round,
+    marked_at: Math.floor(Date.now() / 1000),
+  }, null, 2));
+}
+
+function hasDeadlineMarker(stateDir, round) {
+  try {
+    const marker = JSON.parse(fs.readFileSync(deadlineMarkerPath(stateDir), "utf8"));
+    return marker.reason === TIMEOUT_REASON_RUNNER_DEADLINE && marker.round === round;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeThreadId(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function buildPartialReview(stateDir, state, reviewText) {
+  if (!reviewText) return null;
+  try { atomicWrite(path.join(stateDir, "review.md"), reviewText); } catch {}
+  return parseOutputMarkdown(reviewText, state.skill_name || "");
 }
 
 function readState(stateDir) {
@@ -712,7 +751,7 @@ function parseOutputMarkdown(md, skillHint) {
 // JSONL parsing — v13 (structured JSON output)
 // ============================================================
 
-function parseJsonlV13(stateDir, lastLineCount, elapsed, processAlive, timeoutVal, state) {
+function parseJsonlV13(stateDir, lastLineCount, elapsed, processAlive, timeoutVal, state, runnerDeadlineObserved = false) {
   const jsonlFile = path.join(stateDir, "output.jsonl");
   const errFile = path.join(stateDir, "error.log");
 
@@ -727,6 +766,7 @@ function parseJsonlV13(stateDir, lastLineCount, elapsed, processAlive, timeoutVa
   let turnFailedMsg = "";
   let extractedThreadId = "";
   let reviewText = "";
+  let progressObserved = false;
 
   // Parse ALL lines for terminal state + data extraction
   for (const rawLine of allLines) {
@@ -740,8 +780,12 @@ function parseJsonlV13(stateDir, lastLineCount, elapsed, processAlive, timeoutVa
     }
     const t = d.type || "";
 
-    if (t === "thread.started" && d.thread_id) {
-      extractedThreadId = d.thread_id;
+    if (t === "turn.started" || t === "item.started" || t === "item.completed") {
+      progressObserved = true;
+    }
+
+    if (t === "thread.started" && normalizeThreadId(d.thread_id)) {
+      extractedThreadId = normalizeThreadId(d.thread_id);
     }
 
     if (t === "turn.completed") {
@@ -799,14 +843,32 @@ function parseJsonlV13(stateDir, lastLineCount, elapsed, processAlive, timeoutVa
 
   // Determine status and build JSON result
   const currentRound = state.round || 1;
+  const threadId = normalizeThreadId(extractedThreadId) || normalizeThreadId(state.thread_id);
+
+  // Treat an explicit turn failure as terminal even if a malformed stream also
+  // contains a completion event.
+  if (turnFailed) turnCompleted = false;
 
   if (turnCompleted) {
-    if (!extractedThreadId || !reviewText) {
-      const errorDetail = !extractedThreadId ? "no thread_id" : "no agent_message";
+    if (!threadId || !reviewText) {
+      const errorDetail = !threadId ? "no thread_id" : "no agent_message";
       return {
-        json: { status: "failed", round: currentRound, elapsed_seconds: elapsed, exit_code: EXIT_TURN_FAILED, error: `turn.completed but ${errorDetail}`, review: null, activities },
+        json: {
+          status: "failed",
+          round: currentRound,
+          elapsed_seconds: elapsed,
+          exit_code: EXIT_TURN_FAILED,
+          error: `turn.completed but ${errorDetail}`,
+          failure_reason: !threadId ? "missing_thread_id" : "missing_agent_message",
+          recoverable: false,
+          thread_id: threadId || null,
+          progress_observed: progressObserved,
+          review: buildPartialReview(stateDir, state, reviewText),
+          activities,
+        },
         extractedThreadId,
-        reviewText: "",
+        reviewText,
+        progressObserved,
         terminal: true,
       };
     }
@@ -819,24 +881,51 @@ function parseJsonlV13(stateDir, lastLineCount, elapsed, processAlive, timeoutVa
     const review = parseOutputMarkdown(reviewText, skillName);
 
     return {
-      json: { status: "completed", round: currentRound, elapsed_seconds: elapsed, thread_id: extractedThreadId, review, activities },
+      json: { status: "completed", round: currentRound, elapsed_seconds: elapsed, thread_id: threadId, review, activities },
       extractedThreadId,
       reviewText,
       terminal: true,
     };
   } else if (turnFailed) {
     return {
-      json: { status: "failed", round: currentRound, elapsed_seconds: elapsed, exit_code: EXIT_TURN_FAILED, error: `Codex turn failed: ${sanitizeMsg(turnFailedMsg)}`, review: null, activities },
+      json: {
+        status: "failed",
+        round: currentRound,
+        elapsed_seconds: elapsed,
+        exit_code: EXIT_TURN_FAILED,
+        error: `Codex turn failed: ${sanitizeMsg(turnFailedMsg)}`,
+        failure_reason: "turn_failed",
+        recoverable: false,
+        thread_id: threadId || null,
+        progress_observed: progressObserved,
+        review: buildPartialReview(stateDir, state, reviewText),
+        activities,
+      },
       extractedThreadId,
-      reviewText: "",
+      reviewText,
+      progressObserved,
       terminal: true,
     };
   } else if (!processAlive) {
-    if (timeoutVal > 0 && elapsed >= timeoutVal) {
+    if (runnerDeadlineObserved) {
+      const recoverable = Boolean(threadId) && progressObserved;
       return {
-        json: { status: "timeout", round: currentRound, elapsed_seconds: elapsed, exit_code: EXIT_TIMEOUT, error: `Timeout after ${timeoutVal}s`, review: null, activities },
+        json: {
+          status: "timeout",
+          round: currentRound,
+          elapsed_seconds: elapsed,
+          exit_code: EXIT_TIMEOUT,
+          error: `Timeout after ${timeoutVal}s`,
+          timeout_reason: TIMEOUT_REASON_RUNNER_DEADLINE,
+          recoverable,
+          thread_id: threadId || null,
+          progress_observed: progressObserved,
+          review: buildPartialReview(stateDir, state, reviewText),
+          activities,
+        },
         extractedThreadId,
-        reviewText: "",
+        reviewText,
+        progressObserved,
         terminal: true,
       };
     } else {
@@ -849,9 +938,22 @@ function parseJsonlV13(stateDir, lastLineCount, elapsed, processAlive, timeoutVa
         errorMsg += ": " + sanitizeMsg(errContent.slice(0, 200));
       }
       return {
-        json: { status: "failed", round: currentRound, elapsed_seconds: elapsed, exit_code: EXIT_ERROR, error: errorMsg, review: null, activities },
+        json: {
+          status: "failed",
+          round: currentRound,
+          elapsed_seconds: elapsed,
+          exit_code: EXIT_ERROR,
+          error: errorMsg,
+          failure_reason: "codex_process_exit",
+          recoverable: false,
+          thread_id: threadId || null,
+          progress_observed: progressObserved,
+          review: buildPartialReview(stateDir, state, reviewText),
+          activities,
+        },
         extractedThreadId,
-        reviewText: "",
+        reviewText,
+        progressObserved,
         terminal: true,
       };
     }
@@ -860,6 +962,7 @@ function parseJsonlV13(stateDir, lastLineCount, elapsed, processAlive, timeoutVa
       json: { status: "running", round: currentRound, elapsed_seconds: elapsed, activities },
       extractedThreadId,
       reviewText,
+      progressObserved,
       terminal: false,
     };
   }
@@ -1313,7 +1416,7 @@ function cmdStart(argv) {
     args: argv.slice(1),
     options: {
       effort: { type: "string", default: "high" },
-      timeout: { type: "string", default: "3600" },
+      timeout: { type: "string", default: String(DEFAULT_TIMEOUT_S) },
       sandbox: { type: "string", default: "read-only" },
       "stall-threshold": { type: "string", default: "" },
     },
@@ -1321,7 +1424,7 @@ function cmdStart(argv) {
   });
 
   const effort = values.effort || "high";
-  const timeout = parseInt(values.timeout || "3600", 10);
+  const timeout = parseInt(values.timeout || String(DEFAULT_TIMEOUT_S), 10);
   const sandbox = values.sandbox || "read-only";
   const stallThreshold = parseInt(values["stall-threshold"] || "12", 10);
 
@@ -1397,6 +1500,8 @@ function cmdStart(argv) {
   let codexPgid = null;
   let watchdogPid = null;
 
+  clearDeadlineMarker(resolvedSessionDir);
+
   function startupCleanup() {
     if (codexPgid !== null) killTree(codexPgid);
     if (watchdogPid !== null && isAlive(watchdogPid)) killSingle(watchdogPid);
@@ -1408,7 +1513,7 @@ function cmdStart(argv) {
     );
     codexPgid = pgid;
 
-    watchdogPid = launchWatchdog(timeout, codexPgid);
+    watchdogPid = launchWatchdog(timeout, codexPgid, resolvedSessionDir, 1);
 
     // Update state.json
     const now = Math.floor(Date.now() / 1000);
@@ -1473,7 +1578,7 @@ function cmdResume(argv) {
     args: argv.slice(1),
     options: {
       effort: { type: "string", default: "high" },
-      timeout: { type: "string", default: "3600" },
+      timeout: { type: "string", default: String(DEFAULT_TIMEOUT_S) },
       "stall-threshold": { type: "string", default: "" },
       recovery: { type: "boolean", default: false },
     },
@@ -1481,7 +1586,7 @@ function cmdResume(argv) {
   });
 
   const effort = values.effort || "high";
-  const timeout = parseInt(values.timeout || "3600", 10);
+  const timeout = parseInt(values.timeout || String(DEFAULT_TIMEOUT_S), 10);
 
   let resolvedSessionDir;
   try {
@@ -1575,25 +1680,49 @@ function cmdResume(argv) {
     prompt, "utf8",
   );
 
-  // Archive current output.jsonl → outputs/
+  // Archive current round artifacts before any active file is cleared.
   const jsonlFile = path.join(resolvedSessionDir, "output.jsonl");
-  if (fs.existsSync(jsonlFile)) {
-    const archivePath = path.join(
-      resolvedSessionDir, "outputs",
-      `output-round-${String(currentRound).padStart(3, "0")}.jsonl`,
-    );
-    try {
-      fs.copyFileSync(jsonlFile, archivePath);
-    } catch {}
+  const reviewFile = path.join(resolvedSessionDir, "review.md");
+  const finalFile = path.join(resolvedSessionDir, "final.txt");
+  const roundLabel = String(currentRound).padStart(3, "0");
+  try {
+    if (fs.existsSync(jsonlFile)) {
+      fs.copyFileSync(
+        jsonlFile,
+        path.join(resolvedSessionDir, "outputs", `output-round-${roundLabel}.jsonl`),
+      );
+    }
+    if (fs.existsSync(reviewFile)) {
+      fs.copyFileSync(
+        reviewFile,
+        path.join(resolvedSessionDir, "outputs", `review-round-${roundLabel}.md`),
+      );
+    }
+    if (fs.existsSync(finalFile)) {
+      fs.copyFileSync(
+        finalFile,
+        path.join(resolvedSessionDir, "outputs", `final-round-${roundLabel}.json`),
+      );
+    }
+  } catch (e) {
+    jsonError(`Cannot archive previous round artifacts: ${e.message}`, "IO_ERROR");
+    return EXIT_ERROR;
   }
 
   // Clear stale artifacts
-  try { fs.unlinkSync(path.join(resolvedSessionDir, "final.txt")); } catch {}
-  try { fs.unlinkSync(path.join(resolvedSessionDir, "review.md")); } catch {}
+  try {
+    if (fs.existsSync(finalFile)) fs.unlinkSync(finalFile);
+    if (fs.existsSync(reviewFile)) fs.unlinkSync(reviewFile);
+  } catch (e) {
+    jsonError(`Cannot clear archived round artifacts: ${e.message}`, "IO_ERROR");
+    return EXIT_ERROR;
+  }
 
   // Track for rollback
   let codexPgid = null;
   let watchdogPid = null;
+
+  clearDeadlineMarker(resolvedSessionDir);
 
   function startupCleanup() {
     if (codexPgid !== null) killTree(codexPgid);
@@ -1606,7 +1735,7 @@ function cmdResume(argv) {
     );
     codexPgid = pgid;
 
-    watchdogPid = launchWatchdog(timeout, codexPgid);
+    watchdogPid = launchWatchdog(timeout, codexPgid, resolvedSessionDir, newRound);
 
     // Update state.json
     const now = Math.floor(Date.now() / 1000);
@@ -1718,7 +1847,7 @@ function cmdPoll(argv) {
   const codexPid = state.pid || 0;
   const codexPgid = state.pgid || 0;
   const watchdogPid = state.watchdog_pid || 0;
-  const timeoutVal = state.timeout || 3600;
+  const timeoutVal = state.timeout || DEFAULT_TIMEOUT_S;
   const startedAt = state.started_at || Math.floor(Date.now() / 1000);
   const lastLineCount = state.last_line_count || 0;
   const stallCount = state.stall_count || 0;
@@ -1728,6 +1857,9 @@ function cmdPoll(argv) {
   const elapsed = now - startedAt;
 
   const processAlive = isAlive(codexPid);
+  const deadlineReached = timeoutVal > 0 && elapsed >= timeoutVal;
+  const runnerDeadlineObserved = deadlineReached
+    && (processAlive || hasDeadlineMarker(stateDir, state.round || 1));
 
   // Count lines for stall detection
   const jsonlFile = path.join(stateDir, "output.jsonl");
@@ -1747,33 +1879,43 @@ function cmdPoll(argv) {
     : now;
 
   // Parse JSONL → structured JSON
-  let result = parseJsonlV13(stateDir, lastLineCount, elapsed, processAlive, timeoutVal, state);
+  let result = parseJsonlV13(
+    stateDir, lastLineCount, elapsed, processAlive, timeoutVal, state, runnerDeadlineObserved,
+  );
 
   // Override: stall/timeout detection for still-running process
   if (!result.terminal) {
-    if (elapsed >= timeoutVal) {
+    if (deadlineReached) {
+      try { writeDeadlineMarker(stateDir, timeoutVal, state.round || 1); } catch {}
+
       // Recover partial output if available
-      let partialReview = null;
-      if (result.reviewText) {
-        const skillName = state.skill_name || "";
-        partialReview = parseOutputMarkdown(result.reviewText, skillName);
-        atomicWrite(path.join(stateDir, "review.md"), result.reviewText);
-      }
+      const partialReview = buildPartialReview(stateDir, state, result.reviewText);
+      const threadId = normalizeThreadId(result.extractedThreadId) || normalizeThreadId(state.thread_id);
+      const progressObserved = result.progressObserved === true;
 
       result = {
-        json: { status: "timeout", round: state.round || 1, elapsed_seconds: elapsed, exit_code: EXIT_TIMEOUT, error: `Timeout after ${timeoutVal}s`, review: partialReview, activities: result.json.activities },
+        json: {
+          status: "timeout",
+          round: state.round || 1,
+          elapsed_seconds: elapsed,
+          exit_code: EXIT_TIMEOUT,
+          error: `Timeout after ${timeoutVal}s`,
+          timeout_reason: TIMEOUT_REASON_RUNNER_DEADLINE,
+          recoverable: Boolean(threadId) && progressObserved,
+          thread_id: threadId || null,
+          progress_observed: progressObserved,
+          review: partialReview,
+          activities: result.json.activities,
+        },
         extractedThreadId: result.extractedThreadId,
         reviewText: result.reviewText,
+        progressObserved,
         terminal: true,
       };
     } else if (newStallCount >= stallThresholdFromState && processAlive) {
       // Recover partial output if available
-      let partialReview = null;
-      if (result.reviewText) {
-        const skillName = state.skill_name || "";
-        partialReview = parseOutputMarkdown(result.reviewText, skillName);
-        atomicWrite(path.join(stateDir, "review.md"), result.reviewText);
-      }
+      const partialReview = buildPartialReview(stateDir, state, result.reviewText);
+      const threadId = normalizeThreadId(result.extractedThreadId) || normalizeThreadId(state.thread_id);
 
       result = {
         json: {
@@ -1783,11 +1925,15 @@ function cmdPoll(argv) {
           exit_code: EXIT_STALLED,
           error: `No new output for ~${Math.round((now - lastOutputAt) / 60)} minutes`,
           review: partialReview,
-          recoverable: !!result.extractedThreadId && (state.stall_recovery_count || 0) < 1,
+          failure_reason: "stalled",
+          recoverable: false,
+          thread_id: threadId || null,
+          progress_observed: result.progressObserved === true,
           activities: result.json.activities,
         },
         extractedThreadId: result.extractedThreadId,
         reviewText: result.reviewText || "",
+        progressObserved: result.progressObserved === true,
         terminal: true,
       };
     }
@@ -1805,7 +1951,15 @@ function cmdPoll(argv) {
     }
   }
 
+  if (result.extractedThreadId) {
+    updateState(stateDir, { thread_id: result.extractedThreadId });
+  }
+
   if (result.terminal) {
+    if (result.json.status !== "timeout") {
+      clearDeadlineMarker(stateDir);
+    }
+
     // Update rounds.json FIRST (before caching) so convergence can be computed
     const rounds = readRounds(stateDir);
     if (rounds.length > 0) {
@@ -1883,11 +2037,6 @@ function cmdPoll(argv) {
 
     verifyAndKillCodex(codexPid, codexPgid);
     if (watchdogPid) verifyAndKillWatchdog(watchdogPid);
-  }
-
-  // Persist thread_id to state.json
-  if (result.extractedThreadId) {
-    updateState(stateDir, { thread_id: result.extractedThreadId });
   }
 
   // Update state.json
@@ -2110,6 +2259,8 @@ function cmdStatus(argv) {
 function cmdWatchdog(argv) {
   const timeoutS = parseInt(argv[0], 10);
   const targetPid = parseInt(argv[1], 10);
+  const stateDir = argv[2] || "";
+  const round = parseInt(argv[3], 10);
 
   if (isNaN(timeoutS) || isNaN(targetPid)) {
     process.stderr.write("Error: _watchdog requires <timeout> <pid>\n");
@@ -2126,7 +2277,12 @@ function cmdWatchdog(argv) {
   }
 
   setTimeout(() => {
-    killTree(targetPid);
+    if (isAlive(targetPid)) {
+      if (stateDir && !isNaN(round)) {
+        try { writeDeadlineMarker(stateDir, timeoutS, round); } catch {}
+      }
+      killTree(targetPid);
+    }
     process.exit(EXIT_SUCCESS);
   }, timeoutS * 1000);
 
@@ -2184,6 +2340,7 @@ function main() {
         "  node codex-runner.js init --skill-name <name> --working-dir <dir>\n" +
         "  echo PROMPT | node codex-runner.js start <session_dir> [--effort <level>] [--timeout <s>] [--sandbox <mode>]\n" +
         "  echo PROMPT | node codex-runner.js resume <session_dir> [--effort <level>] [--timeout <s>]\n" +
+        "  Default start/resume timeout: 18000s (5h)\n" +
         "  node codex-runner.js poll <session_dir> [--min-interval <s>]\n" +
         "  node codex-runner.js stop <session_dir>\n" +
         "  echo JSON | node codex-runner.js finalize <session_dir>\n" +

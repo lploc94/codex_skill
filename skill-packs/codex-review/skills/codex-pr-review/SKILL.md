@@ -24,8 +24,9 @@ json_esc() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=
 - Validate: `init` output must start with `CODEX_SESSION:`. `start`/`resume` must return valid JSON. `CODEX_NOT_FOUND`->tell user install codex.
 - `status === "completed"` means **Codex's turn is done** -- NOT that the debate is over. MUST check Loop Decision table.
 - Loop: Do NOT exit unless consensus or stalemate. No round cap.
-- Errors: `failed`->retry once (re-poll 15s). `timeout`->report partial, suggest lower effort. `stalled`+recoverable->`stop`->recovery `resume`->poll; not recoverable->report partial. Cleanup sequencing: `finalize`+`stop` ONLY after recovery resolves.
-- Cleanup: ALWAYS run `finalize` + `stop`, even on failure/timeout.
+- **Operational authority**: the user's explicit operational decisions are highest priority for waiting, stopping, resuming, retrying, effort, and review termination. Codex findings and recommendations are advisory. This rule governs review operation only and does not authorize product, API, schema, persistence, compatibility, or other application-contract changes.
+- **Timeout recovery**: resume the same session only for a poll with `status:"timeout"`, `timeout_reason:"runner_deadline"`, `recoverable:true`, non-empty `thread_id`, and `progress_observed:true`; preserve partial output, run `stop` once without `finalize`, and let a later invocation resume that same `$SESSION_DIR`. Never create a recovery session or resume the current session automatically. `turn.failed`, process/runner/infrastructure errors, invalid state, missing `thread_id`, `CODEX_NOT_FOUND`, and every `stalled` result are non-recoverable stop-only paths.
+- Cleanup: run `finalize` + `stop` only after normal consensus/stalemate; error paths are `stop` only and preserve the session directory.
 - Runner manages all session state -- NEVER read/write session files manually.
 - **Information barrier**: Claude MUST complete independent analysis BEFORE reading Codex output.
 - **NEVER edit code or create commits** -- debate only.
@@ -52,7 +53,7 @@ Render: template=`claude-analysis`. Read diff, commits, file stats, PR descripti
 Poll + report activities.
 Parse `review.blocks[]` + `review.overall_assessment` (code_quality, pr_description_accuracy, commit_hygiene, scope_appropriateness). Fallback: `review.raw_markdown`.
 Compare Claude FINDING-{N} vs Codex ISSUE-{N}: Agreement, Disagreement, Claude-only, Codex-only, Same Direction Different Severity.
-Claude orchestration is authoritative -- Codex VERDICT is advisory.
+User operational decisions control orchestration -- Codex VERDICT is advisory.
 Render: template=`round2+`. Placeholders: `SESSION_CONTEXT`, `PR_TITLE`, `BASE_BRANCH`, `COMMIT_COUNT`, `COMMIT_LIST`, `AGREED_POINTS`, `DISAGREED_POINTS`, `NEW_FINDINGS`, `CONTINUE_OR_CONSENSUS_OR_STALEMATE`.
 Resume + back to Poll.
 
@@ -68,11 +69,11 @@ Merge Recommendation: any agreed critical must-pass=REJECT; >=3 agreed high must
 Stalemate: produce scorecard from agreed findings, present disagreements, defer to user.
 
 ### 6. Finalize + Cleanup
-`finalize` + `stop`. Always run. (-> `references/protocol.md` for error handling)
+`finalize` + `stop` only after normal consensus or stalemate. Apply the recoverable runner-deadline rule above; all other timeout, failure, stall, or runner-error paths run `stop` once without `finalize` and preserve the same session for inspection or an explicitly allowed later continuation. (-> `references/protocol.md` for error handling)
 
 ## Flavor Text Triggers
 SKILL_START, POLL_WAITING, CODEX_RETURNED, THINK_PEER, THINK_AGREE, THINK_DISAGREE, SEND_REBUTTAL, LATE_ROUND, APPROVE_VICTORY, STALEMATE_DRAW, FINAL_SUMMARY
 
 ## Rules
 - **Safety**: NEVER `git commit`, `git add`, `git rebase`, or modify code/history.
-- Both Claude and Codex are equal peers. Codex reviews only, no edits.
+- Both Claude and Codex are equal analytical peers; explicit user operational decisions control orchestration. Codex reviews only, no edits.

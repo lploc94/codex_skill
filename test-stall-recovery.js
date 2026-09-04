@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * E2E Stall Recovery Test
+ * E2E Stall Stop-only Test
  *
  * Simulates a Codex stall scenario and verifies:
  * 1. Stall detection with configurable threshold
  * 2. Partial output recovery
- * 3. `recoverable` flag
- * 4. `--recovery` flag increments stall_recovery_count
- * 5. Auto-reduced stall_threshold on recovery
- * 6. Second stall → recoverable === false
+ * 3. `stalled` is always non-recoverable, even with a thread_id
+ * 4. Session state preserves the thread_id for inspection
  */
 
 import { execFileSync, spawn } from "node:child_process";
@@ -82,7 +80,7 @@ async function sleep(ms) {
 }
 
 async function main() {
-  console.log("=== E2E Stall Recovery Test ===\n");
+  console.log("=== E2E Stall Stop-only Test ===\n");
 
   // Step a: Init session
   console.log("Step a: Init session");
@@ -139,7 +137,7 @@ async function main() {
   let pollCount = 0;
 
   for (let i = 0; i < 10; i++) {
-    pollResult = runJson("poll", [sessionDir]);
+    pollResult = runJson("poll", [sessionDir, "--min-interval", "0"]);
     pollCount++;
     console.log(`  Poll ${pollCount}: status=${pollResult.status}`);
 
@@ -152,7 +150,8 @@ async function main() {
   // Step e: Verify stall detection
   console.log("\nStep e: Verify stall detection");
   assert(pollResult.status === "stalled", `status === "stalled" (got: ${pollResult.status})`);
-  assert(pollResult.recoverable === true, `recoverable === true (got: ${pollResult.recoverable})`);
+  assert(pollResult.recoverable === false, `recoverable === false (got: ${pollResult.recoverable})`);
+  assert(pollResult.failure_reason === "stalled", `failure_reason === "stalled" (got: ${pollResult.failure_reason})`);
   assert(pollResult.exit_code === 4, `exit_code === 4 (got: ${pollResult.exit_code})`);
   assert(typeof pollResult.error === "string" && pollResult.error.includes("No new output"), `error contains "No new output"`);
 
@@ -162,63 +161,16 @@ async function main() {
   assert(stateAfterStall.thread_id === threadId, `thread_id preserved = ${threadId}`);
   console.log();
 
-  // Step f: Kill dummy process, stop, then resume --recovery
-  console.log("Step f: Stop + resume with --recovery");
+  // Step f: Stop without attempting recovery
+  console.log("Step f: Stop without recovery");
   try { process.kill(dummyPid1, "SIGKILL"); } catch {}
 
   const stopResult = runJson("stop", [sessionDir]);
   console.log(`  stop: status=${stopResult.status}`);
+  assert(stopResult.status === "stopped", "stop preserves the session without recovery");
 
-  // Spawn new dummy process for recovery round
-  const dummyPid2 = spawnDummy();
-
-  const resumeResult = runJson("resume", [sessionDir, "--recovery", "--stall-threshold", "5"], "Recovery prompt: continue analysis without web fetches");
-  assert(resumeResult.status === "started", `resume status = ${resumeResult.status}`);
-  assert(resumeResult.round === 2, `round = ${resumeResult.round}`);
-
-  // Replace PID again
-  const state2 = readState(sessionDir);
-  state2.pid = dummyPid2;
-  state2.pgid = dummyPid2;
-  fs.writeFileSync(path.join(sessionDir, "state.json"), JSON.stringify(state2, null, 2));
-  console.log();
-
-  // Step g: Verify recovery state
-  console.log("Step g: Verify recovery state");
-  const stateAfterResume = readState(sessionDir);
-  assert(stateAfterResume.stall_recovery_count === 1, `stall_recovery_count = ${stateAfterResume.stall_recovery_count}`);
-  assert(stateAfterResume.stall_threshold <= 5, `stall_threshold auto-reduced to ${stateAfterResume.stall_threshold}`);
-  console.log();
-
-  // Step h: Trigger second stall → verify recoverable === false
-  console.log("Step h: Second stall → recoverable === false");
-
-  // Write minimal JSONL for round 2 (same thread, stall again)
-  writeJsonl(sessionDir, [
-    { type: "thread.started", thread_id: threadId },
-    { type: "item.started", item: { type: "command_execution", command: "analyzing..." } },
-    { type: "item.completed", item: { type: "command_execution", command: "analyzing...", output: "partial" } },
-  ]);
-
-  let pollResult2;
-  let pollCount2 = 0;
-
-  for (let i = 0; i < 10; i++) {
-    pollResult2 = runJson("poll", [sessionDir]);
-    pollCount2++;
-    console.log(`  Poll ${pollCount2}: status=${pollResult2.status}`);
-
-    if (pollResult2.status === "stalled") break;
-    await sleep(200);
-  }
-
-  assert(pollResult2.status === "stalled", `second stall detected`);
-  assert(pollResult2.recoverable === false, `recoverable === false (got: ${pollResult2.recoverable})`);
-  console.log();
-
-  // Step i: Cleanup
-  console.log("Step i: Cleanup");
-  try { process.kill(dummyPid2, "SIGKILL"); } catch {}
+  // Step g: Cleanup
+  console.log("Step g: Cleanup");
   runJson("stop", [sessionDir]);
 
   console.log("\n=== ALL TESTS PASSED ===");

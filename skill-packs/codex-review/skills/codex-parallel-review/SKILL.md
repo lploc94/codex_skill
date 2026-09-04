@@ -24,8 +24,9 @@ json_esc() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=
 - Validate: `init` output must start with `CODEX_SESSION:`. `start`/`resume` must return valid JSON. `CODEX_NOT_FOUND`->tell user install codex.
 - `status === "completed"` means **Codex's turn is done** -- NOT that the debate is over. MUST check Loop Decision table.
 - Loop: Do NOT exit unless all findings resolved or stalemate. No round cap.
-- Errors: `failed`->retry once (re-poll 15s). `timeout`->report partial, suggest lower effort. `stalled`+recoverable->`stop`->recovery `resume`->poll; not recoverable->report partial. Cleanup sequencing: `finalize`+`stop` ONLY after recovery resolves.
-- Cleanup: ALWAYS run `finalize` + `stop`, even on failure/timeout.
+- **Operational authority**: the user's explicit operational decisions are highest priority for waiting, stopping, resuming, retrying, effort, and review termination. Codex findings and recommendations are advisory. This rule governs review operation only and does not authorize product, API, schema, persistence, compatibility, or other application-contract changes.
+- **Timeout recovery**: an affected Codex session may use the same-session recovery path only for `status:"timeout"`, `timeout_reason:"runner_deadline"`, `recoverable:true`, non-empty `thread_id`, and `progress_observed:true`; preserve partial output, stop once without `finalize`, and let a later invocation resume that same session. Never create a recovery session or resume the current session automatically. `turn.failed`, process/runner/infrastructure errors, invalid state, missing `thread_id`, `CODEX_NOT_FOUND`, and every `stalled` result are non-recoverable stop-only paths.
+- Cleanup: run `finalize` + `stop` only after normal resolution/consensus/stalemate; error paths are `stop` only and preserve session directories.
 - Runner manages all session state -- NEVER read/write session files manually.
 - For detailed error flows -> `Read references/protocol.md`
 
@@ -49,7 +50,7 @@ Start: `printf '%s' "$PROMPT" | node "$RUNNER" start "$SESSION_DIR" --effort "$E
 Each writes FINDING-{N} with Category, Severity, File, Location, Problem, Suggested fix.
 
 ### 3. Poll Codex + Collect Agent Results
-Poll Codex. Collect agent results as they finish. If agent fails, continue with remaining.
+Poll Codex. Collect agent results as they finish. If a Claude agent fails, continue with the remaining agents; any Codex/runner error follows the stop-only contract and aborts the Codex-backed review.
 
 ### 4. Merge Findings
 4a) Deduplicate Claude findings across agents -- same file + overlapping lines -> keep higher severity.
@@ -72,7 +73,7 @@ Reviewers: 5. Report: Claude/Codex findings, Agreed, Resolved via debate, Unreso
 Present: Consensus Issues by severity, Resolved Disagreements, Unresolved table, Risk Assessment.
 
 ### 7. Finalize + Cleanup
-`finalize` + `stop`. Always run. (-> `references/protocol.md` for error handling)
+`finalize` + `stop` only after normal resolution, consensus, or stalemate. Apply the same-session runner-deadline rule above; all other timeout, failure, stall, or runner-error paths stop affected sessions once without `finalize` and preserve their directories. (-> `references/protocol.md` for error handling)
 
 ## Flavor Text Triggers
 SKILL_START, PARALLEL_LAUNCH, POLL_WAITING, CODEX_RETURNED, PARALLEL_MERGE, APPLY_FIX, SEND_REBUTTAL, LATE_ROUND, APPROVE_VICTORY, STALEMATE_DRAW, FINAL_SUMMARY

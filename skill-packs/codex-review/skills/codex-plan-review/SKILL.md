@@ -24,8 +24,9 @@ json_esc() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=
 - Validate: `init` output must start with `CODEX_SESSION:`. `start`/`resume` must return valid JSON. `CODEX_NOT_FOUND`->tell user install codex.
 - `status === "completed"` means **Codex's turn is done** -- NOT that the debate is over. MUST check Loop Decision table.
 - Loop: Do NOT exit unless APPROVE or stalemate. No round cap.
-- Errors: `failed`->retry once (re-poll 15s). `timeout`->report partial, suggest lower effort. `stalled`+recoverable->`stop`->recovery `resume`->poll; not recoverable->report partial. Cleanup sequencing: `finalize`+`stop` ONLY after recovery resolves.
-- Cleanup: ALWAYS run `finalize` + `stop`, even on failure/timeout.
+- **Operational authority**: the user's explicit operational decisions are highest priority for waiting, stopping, resuming, retrying, effort, and review termination. Codex findings and recommendations are advisory. This rule governs review operation only and does not authorize product, API, schema, persistence, compatibility, or other application-contract changes.
+- **Timeout recovery**: resume the same session only for a poll with `status:"timeout"`, `timeout_reason:"runner_deadline"`, `recoverable:true`, non-empty `thread_id`, and `progress_observed:true`; preserve partial output, run `stop` once without `finalize`, and let a later invocation resume that same `$SESSION_DIR`. Never create a recovery session or resume the current session automatically. `turn.failed`, process/runner/infrastructure errors, invalid state, missing `thread_id`, `CODEX_NOT_FOUND`, and every `stalled` result are non-recoverable stop-only paths.
+- Cleanup: run `finalize` + `stop` only after normal `APPROVE`/stalemate; error paths are `stop` only and preserve the session directory.
 - Runner manages all session state -- NEVER read/write session files manually.
 - For detailed error flows -> `Read references/protocol.md`
 
@@ -82,7 +83,7 @@ APPROVE -> done. Stalemate -> present deadlocked issues, ask user.
 Report: Rounds, Verdict, Issues Found/Fixed/Disputed, user decisions, edits made, risks, next steps.
 
 ### 6. Finalize + Cleanup
-`finalize` + `stop`. Always run. (-> `references/protocol.md` for error handling)
+`finalize` + `stop` only after normal `APPROVE` or stalemate. Apply the recoverable runner-deadline rule above; all other timeout, failure, stall, or runner-error paths run `stop` once without `finalize` and preserve the same session for inspection or an explicitly allowed later continuation. (-> `references/protocol.md` for error handling)
 
 ## Flavor Text Triggers
 SKILL_START, POLL_WAITING, CODEX_RETURNED, APPLY_FIX, SEND_REBUTTAL, LATE_ROUND, APPROVE_VICTORY, STALEMATE_DRAW, FINAL_SUMMARY

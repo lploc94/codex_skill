@@ -126,7 +126,7 @@ skill-packs/codex-review/
 1. **Skill invocation** (`/codex-plan-review`, `/codex-impl-review`, `/codex-think-about`, `/codex-commit-review`, `/codex-pr-review`, `/codex-parallel-review`, `/codex-codebase-review`, or `/codex-security-review`) follows SKILL.md step-by-step
 2. **Runner path**: SKILL.md contains hardcoded absolute path to `codex-runner.js`
 3. **Prompt rendering**: SKILL.md calls `render --skill X --template Y --skills-dir $SKILLS_DIR` with JSON vars on stdin → receives rendered prompt on stdout
-4. **Session lifecycle**: `init` → `start` (stdin prompt) → `poll` (JSON response) → `resume` (stdin prompt) → `poll` → ... → `finalize` → `stop`
+4. **Session lifecycle**: `init` → `start` (stdin prompt) → `poll` (JSON response) → `resume` (stdin prompt) → `poll` → ... → `finalize` → `stop` for a normal terminal outcome; a qualifying runner-deadline timeout preserves the same session for later `stop` → `resume`, while all other timeout/error paths use `stop` only and preserve the unfinalized session
 5. **codex-runner.js** spawns `codex exec --json --sandbox read-only` as a detached process, polls JSONL output, parses markdown into structured JSON
 6. **Review debate loop** (plan-review, impl-review, commit-review, pr-review): Claude reads `poll` JSON → `review.blocks[].id` ISSUE-{N} → fixes/rebuts → `render` rebuttal → `resume` → repeats until `APPROVE` or stalemate
 7. **Peer debate loop** (think-about): Claude and Codex think independently → compare JSON responses → exchange perspectives → repeat until consensus or stalemate → present to user
@@ -145,6 +145,9 @@ skill-packs/codex-review/
 - **Prompt minimalism**: Prompts contain only file paths and context; Codex reads files/diffs itself
 - **Structured output**: Review skills use `ISSUE-{N}` format with `VERDICT` block; think-about uses Key Insights / Considerations / Recommendations
 - **Thread persistence**: `init` creates a session; `start` begins round 1; `resume` continues with auto thread_id lookup
+- **Review timeout**: The runner defaults to 18,000 seconds (5 hours) so long-running exhaustive reviews can finish while Codex is still making progress; callers may still pass `--timeout` for bounded tests or deliberately shorter runs
+- **Timeout recovery metadata**: A timeout is resumable only when poll JSON reports `timeout_reason: "runner_deadline"`, `recoverable: true`, a non-empty `thread_id`, and `progress_observed: true`; `turn.failed`, process/runner errors, missing or invalid state/thread context, `CODEX_NOT_FOUND`, and stalled results are stop-only
+- **Operational authority**: Explicit user operational decisions outrank default skill rules and Codex findings for review orchestration. This does not authorize changes to product behavior, APIs, schemas, persistence, compatibility, or other application contracts
 - **Stalemate detection**: Stops if same points repeat for 2 consecutive rounds with no progress
 - **PID-reuse protection**: `verifyCodex()` and `verifyWatchdog()` check process cmdline before killing — prevents killing wrong process if OS reuses the PID
 - **Atomic install**: Uses staging dir + rename for safe install/update with rollback on failure
@@ -156,8 +159,8 @@ skill-packs/codex-review/
 | `version` | (none) | Plain text: `13` |
 | `init --skill-name X --working-dir Y` | (none) | Plain text: `CODEX_SESSION:/path` |
 | `start <session_dir> [--effort] [--timeout] [--sandbox]` | Prompt on stdin | JSON: `{ status, session_dir, round }` |
-| `resume <session_dir> [--effort]` | Prompt on stdin | JSON: `{ status, session_dir, round, thread_id }` |
-| `poll <session_dir>` | (none) | JSON: `{ status, round, elapsed_seconds, review, activities }` |
+| `resume <session_dir> [--effort] [--timeout]` | Prompt on stdin | JSON: `{ status, session_dir, round, thread_id }` |
+| `poll <session_dir>` | (none) | JSON: `{ status, round, elapsed_seconds, review, activities, recovery metadata when terminal }` |
 | `stop <session_dir>` | (none) | JSON: `{ status: "stopped", session_dir }` |
 | `finalize <session_dir>` | Override JSON on stdin | JSON: `{ status: "finalized", meta }` |
 | `status <session_dir>` | (none) | JSON: `{ status, session_id, rounds, ... }` |
@@ -168,7 +171,7 @@ skill-packs/codex-review/
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 2 | Timeout (default 3600s) |
+| 2 | Runner deadline timeout (default 18000s / 5h); recoverability is determined by poll metadata |
 | 3 | Turn failed |
 | 4 | Stalled (no output for ~3 minutes) |
 | 5 | Codex CLI not found in PATH |
@@ -217,7 +220,7 @@ skill-packs/codex-review/
 - **Prompt template engine** (`render`): Runner reads `references/prompts.md`, resolves `{PLACEHOLDER}` from stdin JSON, auto-injects `{OUTPUT_FORMAT}` and `{CLAUDE_ANALYSIS_FORMAT}`.
 - **`init` creates subdirectories**: `prompts/` and `outputs/` created at init time for round-level archival.
 - **`start`/`resume` read prompt from stdin**: Prompt piped via stdin, runner writes `prompt.txt` + archives to `prompts/round-NNN.txt`.
-- **`resume` archives JSONL**: Previous `output.jsonl` moved to `outputs/output-round-NNN.jsonl` before new round.
+- **`resume` archives prior artifacts**: Previous `output.jsonl`, partial `review.md`, and the cached terminal result `final.txt` are copied into round-specific files under `outputs/` before the new round clears active artifacts.
 - **`finalize` replaces manual meta.json**: Aggregates timing from `rounds.json`, accepts verdict override via stdin JSON.
 - **`status` is read-only**: Reports session state without side effects.
 - **`stop` outputs JSON**: `{ status: "stopped", session_dir }` instead of silent exit.

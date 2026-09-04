@@ -43,6 +43,20 @@ The runner handles throttling internally (default 120s min-interval between poll
 
 Report **specific activities** from `activities` array (e.g. "Codex [45s]: reading src/auth.js"). NEVER report generic "Codex is running".
 
+The runner's default turn timeout is **18,000 seconds (5 hours)**. Use an explicit `--timeout` only when a bounded run is intentional (for example, a focused test); do not treat the default timeout as evidence that Codex stalled while it is producing progress.
+
+### Operational Authority And Recovery
+
+Explicit operational decisions from the user are the highest-priority instructions for review orchestration. They control whether to wait, stop, resume, retry, change effort, accept partial output, or end the review. Codex findings, verdicts, and recovery suggestions are advisory and must not override an explicit user decision.
+
+This authority applies to the operation of the review only. It does not authorize changes to the application's product behavior, API, schema, persistence, compatibility, or other user-facing contracts unless the user explicitly requests that separate change.
+
+The runner includes recovery metadata on terminal polls:
+
+- A **recoverable runner deadline** has `status: "timeout"`, `timeout_reason: "runner_deadline"`, `recoverable: true`, a non-empty `thread_id`, and `progress_observed: true` from valid turn/item activity.
+- A `turn.failed` result has `failure_reason: "turn_failed"` and `recoverable: false`; it is never a runner deadline.
+- A Codex process exit, runner/infrastructure error, invalid state, missing `thread_id`, `CODEX_NOT_FOUND`, or `stalled` result is non-recoverable and must remain stop-only.
+
 Continue while `status === "running"`. Stop on `completed|failed|timeout|stalled`.
 
 **CRITICAL**: `status === "completed"` means Codex finished its turn -- it does NOT mean the debate is over. After `completed`, check the skill's Loop Decision table.
@@ -55,8 +69,8 @@ After each `poll` returns `status === "completed"`, the debate loop determines w
 
 ```
 Poll (completed) → Check stalemate → Check verdict → [EXIT or CONTINUE?]
-                                                        EXIT → Finalize
-                                                        CONTINUE → Fix/Rebut → Render → Resume → Poll again
+                                                         EXIT → Finalize (normal outcome only)
+                                                         CONTINUE → Fix/Rebut → Render → Resume → Poll again
 ```
 
 ### Mandatory Rules
@@ -70,7 +84,7 @@ Poll (completed) → Check stalemate → Check verdict → [EXIT or CONTINUE?]
 
 ### Variant: Apply/Rebut (impl-review, plan-review)
 
-These skills use `APPROVE`/`REVISE` verdict taxonomy. Codex decides; Claude fixes and rebuts.
+These skills use `APPROVE`/`REVISE` verdict taxonomy. Codex proposes a verdict; Claude applies fixes and orchestration subject to the user's explicit operational decisions.
 
 **Loop Decision Table:**
 
@@ -89,7 +103,7 @@ These skills use `APPROVE`/`REVISE` verdict taxonomy. Codex decides; Claude fixe
 
 ### Variant: Cross-Analysis (commit-review, pr-review)
 
-These skills use `CONSENSUS`/`CONTINUE`/`STALEMATE` verdict taxonomy. Codex verdict is advisory; Claude orchestration is authoritative.
+These skills use `CONSENSUS`/`CONTINUE`/`STALEMATE` verdict taxonomy. Codex verdict is advisory; Claude applies the orchestration rules subject to the user's explicit operational decisions.
 
 **Loop Decision Table:**
 
@@ -114,18 +128,20 @@ node "$RUNNER" stop "$SESSION_DIR"
 ```
 Optionally include `"scope":"..."` and `"issues":{...}` in finalize JSON. Report `$SESSION_DIR` path to user.
 
-**ALWAYS run `finalize` + `stop`**, even on failure/timeout.
+Run `finalize` + `stop` only after a normal terminal outcome: `APPROVE`, consensus, or an explicit stalemate. Never finalize an errored, timed-out, or stalled session. The runner's `stop` command preserves the session directory for later inspection or an explicitly requested continuation.
 
 ## Error Handling
 | Status | Action |
 |--------|--------|
-| `failed` | Retry once -- re-poll after 15s. |
-| `timeout` | Report partial results from `review.raw_markdown`, suggest lower effort. Run cleanup. |
-| `stalled` + `recoverable === true` | `stop` -> prepend recovery note -> `resume --recovery` -> poll (30s, 15s+). |
-| `stalled` + `recoverable === false` | Report partial results, suggest lower effort. Run cleanup. |
-| `CODEX_NOT_FOUND` | Tell user to install codex. |
+| `timeout` with `timeout_reason === "runner_deadline"`, `recoverable === true`, non-empty `thread_id`, and `progress_observed === true` | Report `review.raw_markdown`/partial activities. Run `stop` once without `finalize`, preserve the same session, and allow a later skill invocation (after restart, if applicable) to render a continuation prompt and `resume` that same `$SESSION_DIR`. Never create a replacement session. Do not resume the current session automatically. |
+| `timeout` without all recoverable metadata | Treat as non-recoverable. Report partial results, run `stop` once, and do not retry, resume, re-init, or finalize. |
+| `failed` with `failure_reason === "turn_failed"` | Report the error and any partial results. Run `stop` once; do not retry, resume, re-init, or finalize. |
+| `failed` from a Codex process exit or missing/invalid state/thread context | Report the error and any partial results. Run `stop` once; do not retry, resume, re-init, or finalize. |
+| `stalled` | Always non-recoverable, even when a thread ID exists. Run `stop` once; do not attempt recovery/resume, retry, re-init, or finalize. Report the partial result. |
+| runner `start`/`resume`/`poll`/`finalize` error | If a session exists, run `stop` once. Do not retry the failed command or finalize. Report the runner error and tell the user to wait until the review infrastructure is available. |
+| `CODEX_NOT_FOUND` | Stop an existing session once, if any, but do not finalize. Tell the user to install Codex (`npm install -g @openai/codex`) rather than retrying automatically. |
 
-**Cleanup sequencing**: Run `finalize` + `stop` ONLY after recovery resolves (success or second failure). Do NOT finalize before recovery attempt.
+**Failure-path contract**: Every timeout that fails the recoverable metadata check, every failure, stall, or runner/infrastructure error is terminal for the current invocation. Invoke `stop` at most once, never invoke `finalize`, never start a replacement session, and do not resume automatically. Preserve the session directory, `state.json`, `thread_id`, archived JSONL, and any partial `review.md`. A later invocation may resume only the same session when the runner-deadline metadata is still valid and the user has not given a contrary operational decision.
 
 ## Flavor Text Convention
 Load `references/flavor-text.md` at skill start. Pick 1 random message per trigger from matching pool -- never repeat within session. Display as `> {emoji} {message}` blockquote. Replace `{N}`, `{TOTAL}`, `{CHUNK}`, `{ROUND}` with actual values. User can disable with "no flavor" or "skip humor". Only trigger on first poll per round (avoid spam).
